@@ -1,0 +1,77 @@
+{
+  "name": "dynamic-island",
+  "productName": "Dynamic Island",
+  "version": "1.0.0",
+  "description": "iOS-style Dynamic Island overlay for Windows 10/11",
+  "main": "electron/main.cjs",
+  "author": "zaenal",
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently -k -n vite,electron -c magenta,cyan \"vite\" \"wait-on tcp:127.0.0.1:5173 && cross-env ELECTRON_DEV=1 electron .\"",
+    "build:ui": "vite build",
+    "start": "vite build && electron .",
+    "icon": "node scripts/gen-icon.cjs",
+    "dist": "vite build && electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.zaenal.dynamicisland",
+    "productName": "Dynamic Island",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": ".",
+        "filter": [
+          "media.ps1",
+          "sysinfo.ps1",
+          "icon.png"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "framer-motion": "^14.4.0",
+    "lucide-react": "^1.60.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.6",
+    "cross-env": "^10.1.0",
+    "electron": "^44.9.1",
+    "electron-builder": "^26.15.3",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.4",
+    "wait-on": "^9.5.1"
+  }
+}
