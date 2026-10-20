@@ -1,0 +1,54 @@
+name: Build & Release Windows EXE
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Windows Installer & Portable EXE
+        run: npm run dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Dynamic Island for Windows ${{ github.ref_name }}
+          body: |
+            ## 🏝️ Dynamic Island for Windows (${{ github.ref_name }})
+
+            ### 📥 Cara Install untuk Teman / Rekan:
+            1. **Versi Installer (Direkomendasikan):** Download **`Dynamic Island Setup 1.0.0.exe`**, klik 2x untuk meng-install. Otomatis membuat shortcut dan berjalan saat laptop dinyalakan.
+            2. **Versi Portable (Tanpa Install):** Download **`Dynamic Island 1.0.0.exe`**, langsung klik 2x untuk menjalankan.
+
+            ### ✨ Fitur:
+            - **Smooth 120fps Dynamic Island** dengan mode *Top-Lip* (`7px`) yang tidak menghalangi tab browser + tombol **Pin (`📌`)**.
+            - **Live Status Peek** tiap 30 detik (Suhu Laptop, Baterai Laptop, Kecepatan Internet `KB/s`/`MB/s`, Baterai Bluetooth, Sisa Timer, & Lagu aktif).
+            - **Spotify & Live Synced Lyrics** (Karaoke auto-scroll real-time tanpa perlu login/API key).
+            - **Clock Tools**: Timer (Pomodoro/Fokus), Stopwatch (dengan Lap), & Alarm 24 jam dengan suara *chime*.
+            - **Home Shortcuts & Quick Volume Slider**: Drag & drop aplikasi `.exe` / folder favorit + atur volume & mute langsung dari Dynamic Island.
+            - **File Stash, Catatan Cepat (Scratchpad), & Riwayat Clipboard** (otomatis menyimpan 10 teks terakhir yang di-*copy*).
+          files: |
+            release/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

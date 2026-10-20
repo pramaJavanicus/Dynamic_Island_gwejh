@@ -31,7 +31,8 @@
         "filter": [
           "media.ps1",
           "sysinfo.ps1",
-          "icon.png"
+          "icon.png",
+          "icon.ico"
         ]
       }
     ],
@@ -50,7 +51,7 @@
           ]
         }
       ],
-      "icon": "resources/icon.png"
+      "icon": "resources/icon.ico"
     },
     "nsis": {
       "oneClick": false,
