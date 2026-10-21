@@ -4,9 +4,10 @@ Aplikasi overlay simpel ala Dynamic Island buat Windows 10/11. Posisinya ngumpet
 
 ## Fitur
 - **Status bar otomatis**: Tiap 30 detik nampilin suhu laptop, baterai laptop, baterai perangkat Bluetooth yang nyambung, sama kecepatan internet.
+- **Perintah Suara (Jarvis) & Gemini AI**: Ada menu Gemini AI buat tanya jawab langsung, plus tombol mikrofon buat ngasih perintah suara (misal: *"buka Google Chrome dan buka Web WhatsApp"*, *"buka Spotify dan putar lagu ..."*, *"pasang timer 5 menit"*, *"buka kalkulator"*, dll).
 - **Spotify & Lirik**: Kontrol musik (play/pause/next/prev) + lirik lagu jalan otomatis (synced lyrics).
 - **Tombol Pin**: Biar Dynamic Island tetap kebuka waktu lagi ngerjain tugas/projek sambil baca lirik atau lihat timer.
-- **Shortcut & Volume**: Bisa drag & drop aplikasi (`.exe`/`.lnk`) atau folder favorit biar gampang dibuka, plus ada slider volume & tombol mute.
+- **Shortcut, Kalkulator & Volume**: Akses cepat ke Google Drive, Calendar, Gmail, dan Kalkulator Windows. Bisa drag & drop aplikasi (`.exe`/`.lnk`) atau folder favorit biar gampang dibuka, plus ada slider volume & tombol mute.
 - **Clock**: Ada Timer, Stopwatch, sama Alarm. Kalau timer lagi jalan, sisa waktunya tetap kelihatan di kapsul kecil di atas layar.
 - **Stash & Catatan**: Tempat naruh file sementara (bisa di-drag keluar lagi), catatan singkat (scratchpad), dan riwayat teks yang terakhir di-copy (clipboard).
 
