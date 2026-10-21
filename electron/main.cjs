@@ -16,6 +16,8 @@ const stash = require('./stash.cjs');
 const lyrics = require('./lyrics.cjs');
 const { PsBridge } = require('./ps-bridge.cjs');
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const isDev = process.env.ELECTRON_DEV === '1';
 const ROOT_DIR = path.join(__dirname, '..');
 const RES_DIR = app.isPackaged ? process.resourcesPath : path.join(ROOT_DIR, 'resources');
@@ -627,13 +629,13 @@ function registerIpc() {
         'Jenis object di dalam array "actions" yang didukung:',
         '1. {"type":"open_browser","preferChrome":true,"urls":["https://..."]} -> jika user minta buka Chrome / browser dan/atau membuka situs web (misal Web WhatsApp = https://web.whatsapp.com, YouTube = https://www.youtube.com, Google = https://www.google.com, Instagram = https://www.instagram.com, GitHub = https://github.com, ChatGPT = https://chatgpt.com, Gmail = https://mail.google.com, Drive = https://drive.google.com, dll). Jika user bilang "buka google chrome dan buka web whatsapp", gabungkan jadi 1 aksi {"type":"open_browser","preferChrome":true,"urls":["https://web.whatsapp.com"]}.',
         '2. {"type":"play_spotify","query":"judul lagu dan/atau artis"} -> jika user minta buka Spotify dan putar lagu tertentu, atau minta putar lagu dengan judul tertentu.',
-        '3. {"type":"media","cmd":"play|pause|next|prev|open-spotify"} -> kontrol musik umum tanpa judul lagu spesifik.',
+        '3. {"type":"media","cmd":"play|pause|next|prev|open-spotify"} -> kontrol musik/Spotify (misal pause musik di Spotify -> cmd: "pause", lanjutkan musik -> cmd: "play", lagu selanjutnya -> cmd: "next", lagu sebelumnya -> cmd: "prev").',
         '4. {"type":"open_app","app":"nama aplikasi"} -> misal calculator, notepad, explorer, settings, cmd, vscode, discord, roblox, dll.',
         '5. {"type":"google_search","query":"kata kunci"} -> jika user minta cari sesuatu di Google.',
         '6. {"type":"youtube_search","query":"kata kunci"} -> jika user minta cari video/lagu di YouTube.',
-        '7. {"type":"timer","seconds":300} -> pasang timer dalam detik.',
-        '8. {"type":"stopwatch","cmd":"start|reset"} -> mulai atau reset stopwatch.',
-        '9. {"type":"alarm","time":"07:00","label":"Alarm"} -> pasang alarm format HH:MM.',
+        '7. {"type":"timer","cmd":"start|pause|reset","seconds":300} -> pasang/mulai timer dalam detik, jeda timer (cmd:"pause"), atau reset/stop timer (cmd:"reset").',
+        '8. {"type":"stopwatch","cmd":"start|pause|reset|lap"} -> mulai stopwatch (cmd:"start"), jeda/stop stopwatch (cmd:"pause"), catat putaran (cmd:"lap"), atau reset stopwatch (cmd:"reset").',
+        '9. {"type":"alarm","cmd":"add|remove|clear","time":"07:00","label":"Alarm"} -> pasang alarm format 24 jam HH:MM (cmd:"add"), hapus alarm jam tertentu (cmd:"remove"), atau hapus semua alarm (cmd:"clear").',
         '10. {"type":"volume","level":80} atau {"type":"mute","cmd":"toggle"}.',
         '11. {"type":"tab","tab":"home|media|clock|stash|gemini"} atau {"type":"pin","value":true}.',
         'Jika user hanya bertanya pengetahuan umum / mengobrol tanpa perintah aksi PC, kosongkan array "actions": [] dan isi "reply" dengan jawaban lengkapmu.',

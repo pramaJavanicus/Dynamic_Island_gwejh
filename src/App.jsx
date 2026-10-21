@@ -77,6 +77,7 @@ export default function App() {
       setPinned(val);
       pinnedRef.current = typeof val === 'function' ? val(pinnedRef.current) : val;
     },
+    expand,
     clock,
     sysinfo,
     config,

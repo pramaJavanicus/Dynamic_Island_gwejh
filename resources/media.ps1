@@ -233,13 +233,103 @@ function Invoke-MediaCommand([string]$rawCmd) {
 
     $cmd = $rawCmd.ToLowerInvariant()
     $s = Get-Session
-    if ($null -eq $s) { return }
+
     switch ($cmd) {
-        'toggle' { $null = Await ($s.TryTogglePlayPauseAsync()) ([bool]) }
-        'play' { $null = Await ($s.TryPlayAsync()) ([bool]) }
-        'pause' { $null = Await ($s.TryPauseAsync()) ([bool]) }
-        'next' { $null = Await ($s.TrySkipNextAsync()) ([bool]) }
-        'prev' { $null = Await ($s.TrySkipPreviousAsync()) ([bool]) }
+        'toggle' {
+            if ($s) {
+                try { $null = Await ($s.TryTogglePlayPauseAsync()) ([bool]) } catch {}
+            } else {
+                [SpWin32]::TapKey(0xB3) # VK_MEDIA_PLAY_PAUSE
+            }
+        }
+        'play' {
+            $played = $false
+            if ($s) {
+                try {
+                    $info = $s.GetPlaybackInfo()
+                    if ("$($info.PlaybackStatus)" -eq 'Playing') { $played = $true }
+                    else {
+                        $null = Await ($s.TryPlayAsync()) ([bool])
+                        Start-Sleep -Milliseconds 160
+                        $info2 = $s.GetPlaybackInfo()
+                        if ("$($info2.PlaybackStatus)" -eq 'Playing') { $played = $true }
+                    }
+                } catch {}
+            }
+            if (-not $played) {
+                [SpWin32]::TapKey(0xB3) # VK_MEDIA_PLAY_PAUSE fallback
+            }
+        }
+        'pause' {
+            $paused = $false
+            # Pause all playing SMTC sessions (especially Spotify)
+            try {
+                $allSessions = $manager.GetSessions()
+                foreach ($sess in $allSessions) {
+                    try {
+                        $pInfo = $sess.GetPlaybackInfo()
+                        if ("$($pInfo.PlaybackStatus)" -eq 'Playing') {
+                            $null = Await ($sess.TryPauseAsync()) ([bool])
+                            $paused = $true
+                        }
+                    } catch {}
+                }
+            } catch {}
+
+            if ($s) {
+                try {
+                    $null = Await ($s.TryPauseAsync()) ([bool])
+                    Start-Sleep -Milliseconds 160
+                    $info2 = $s.GetPlaybackInfo()
+                    if ("$($info2.PlaybackStatus)" -ne 'Playing') {
+                        $paused = $true
+                    } else {
+                        # Still playing: send hardware media pause/play toggle
+                        [SpWin32]::TapKey(0xB3)
+                        $paused = $true
+                    }
+                } catch {}
+            }
+
+            if (-not $paused) {
+                # If no active SMTC session reported playing, try UI Automation Pause button on Spotify window
+                $spProc = Get-Process Spotify -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+                if ($spProc) {
+                    try {
+                        $root = [System.Windows.Automation.AutomationElement]::FromHandle($spProc.MainWindowHandle)
+                        $cond = New-Object System.Windows.Automation.PropertyCondition(
+                            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                            [System.Windows.Automation.ControlType]::Button
+                        )
+                        $btns = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
+                        foreach ($b in $btns) {
+                            $bName = "$($b.Current.Name)"
+                            if ($bName -match '^(Pause|Jeda)\b') {
+                                $pat = $null
+                                if ($b.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pat)) {
+                                    $pat.Invoke()
+                                    break
+                                }
+                            }
+                        }
+                    } catch {}
+                }
+            }
+        }
+        'next' {
+            if ($s) {
+                try { $null = Await ($s.TrySkipNextAsync()) ([bool]) } catch { [SpWin32]::TapKey(0xB0) }
+            } else {
+                [SpWin32]::TapKey(0xB0) # VK_MEDIA_NEXT_TRACK
+            }
+        }
+        'prev' {
+            if ($s) {
+                try { $null = Await ($s.TrySkipPreviousAsync()) ([bool]) } catch { [SpWin32]::TapKey(0xB1) }
+            } else {
+                [SpWin32]::TapKey(0xB1) # VK_MEDIA_PREV_TRACK
+            }
+        }
     }
 }
 
