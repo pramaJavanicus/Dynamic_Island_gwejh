@@ -32,6 +32,11 @@ contextBridge.exposeInMainWorld('island', {
     openWeb: () => ipcRenderer.send('open:url', 'https://gemini.google.com/app'),
   },
 
+  jarvis: {
+    transcribe: (pcmBase64, lang) => ipcRenderer.invoke('jarvis:transcribe', pcmBase64, lang),
+    tts: (text) => ipcRenderer.invoke('jarvis:tts', text),
+  },
+
   config: {
     get: () => ipcRenderer.invoke('config:get'),
     open: () => ipcRenderer.send('config:open'),

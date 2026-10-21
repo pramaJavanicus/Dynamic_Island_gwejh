@@ -5,6 +5,7 @@ import ExpandedView from './components/ExpandedView.jsx';
 import PeekView, { HiddenLipView } from './components/PeekView.jsx';
 import { useClipboard, useConfig, useMedia, useStash, useSysInfo } from './hooks.js';
 import { useClockTools } from './clockStore.js';
+import { useJarvis } from './jarvis.js';
 
 const api = window.island;
 
@@ -16,7 +17,7 @@ const SPRING = {
   mass: 0.72,
   restDelta: 0.5,
 };
-const EXPANDED = { width: 520, height: 300, borderRadius: 36, y: 8 };
+const EXPANDED = { width: 680, height: 340, borderRadius: 38, y: 8 };
 
 export default function App() {
   const config = useConfig();
@@ -31,6 +32,7 @@ export default function App() {
   const [tab, setTab] = useState('home');
   const [dragOver, setDragOver] = useState(false);
   const [focusToken, setFocusToken] = useState(0);
+  const [voiceTurn, setVoiceTurn] = useState(null);
 
   const islandRef = useRef(null);
   const hoverTimer = useRef();
@@ -69,11 +71,29 @@ export default function App() {
     },
   });
 
+  const jarvis = useJarvis({
+    setTab,
+    setPinned: (val) => {
+      setPinned(val);
+      pinnedRef.current = typeof val === 'function' ? val(pinnedRef.current) : val;
+    },
+    clock,
+    sysinfo,
+    config,
+    onVoiceChatTurn: (user, reply) => {
+      setVoiceTurn({ id: Date.now(), user, reply });
+    },
+  });
+
+  const jarvisBusyRef = useRef(false);
+  useEffect(() => {
+    jarvisBusyRef.current = jarvis.status !== 'idle';
+  }, [jarvis.status]);
+
   const activeClock = !!(clock?.timer?.running || clock?.stopwatch?.running);
   const activeClockRef = useRef(activeClock);
   useEffect(() => {
     activeClockRef.current = activeClock;
-    // When a timer starts while hidden, automatically show the peek capsule so the countdown is visible
     if (activeClock && modeRef.current === 'hidden') {
       setMode('peek');
     } else if (!activeClock && modeRef.current === 'peek' && !hovered.current && !pinnedRef.current) {
@@ -87,7 +107,7 @@ export default function App() {
   const musicPlaying = !!(media?.active && media?.status === 'Playing');
   const compactWidth = media.active ? 320 : stashItems.length ? 260 : 230;
   const peekWidth = Math.min(
-    516,
+    540,
     (sysinfo?.bluetooth?.length ? 360 : 295)
       + (activeClock ? 72 : 0)
       + (musicPlaying ? 115 : 0),
@@ -108,11 +128,10 @@ export default function App() {
   })();
 
   const hideToLip = useCallback((force = false) => {
-    if (!force && pinnedRef.current) return; // stay open when pinned!
+    if (!force && (pinnedRef.current || jarvisBusyRef.current)) return; // stay open when pinned or talking to Jarvis!
     clearTimeout(hoverTimer.current);
     clearTimeout(leaveTimer.current);
     clearTimeout(peekTimer.current);
-    // Keep the small capsule visible when a timer/stopwatch is actively counting down!
     setMode(!force && activeClockRef.current ? 'peek' : 'hidden');
     if (force) {
       setPinned(false);
@@ -125,13 +144,13 @@ export default function App() {
   const scheduleHide = useCallback(() => {
     clearTimeout(leaveTimer.current);
     leaveTimer.current = setTimeout(() => {
-      if (!pinnedRef.current && !inputFocused.current && dragDepth.current === 0 && !hovered.current) {
+      if (!pinnedRef.current && !jarvisBusyRef.current && !inputFocused.current && dragDepth.current === 0 && !hovered.current) {
         hideToLip();
       }
     }, config?.collapseDelay ?? 380);
   }, [hideToLip, config]);
 
-  // --- Periodic 30-second status peek (Suhu + Baterai + Net Speed + Bluetooth + Timer/Lagu) ---
+  // --- Periodic 30-second status peek ---
   useEffect(() => {
     if (config?.peekEnabled === false) return undefined;
     const intervalMs = config?.peekInterval ?? 30000;
@@ -147,7 +166,7 @@ export default function App() {
     }
 
     const id = setInterval(() => {
-      if (hovered.current || pinnedRef.current || inputFocused.current || dragDepth.current > 0) return;
+      if (hovered.current || pinnedRef.current || jarvisBusyRef.current || inputFocused.current || dragDepth.current > 0) return;
       setMode((current) => {
         if (current !== 'hidden') return current;
         api.sysinfo.refresh();
@@ -186,14 +205,14 @@ export default function App() {
   useEffect(() => api.onCursorOutside(() => {
     hovered.current = false;
     clearTimeout(hoverTimer.current);
-    if (!pinnedRef.current && dragDepth.current === 0) {
+    if (!pinnedRef.current && !jarvisBusyRef.current && dragDepth.current === 0) {
       scheduleHide();
     }
   }), [scheduleHide]);
 
   // Only hide on window blur if NOT pinned
   useEffect(() => api.onBlur(() => {
-    if (!pinnedRef.current && !internalDrag.current && dragDepth.current === 0 && !hovered.current) {
+    if (!pinnedRef.current && !jarvisBusyRef.current && !internalDrag.current && dragDepth.current === 0 && !hovered.current) {
       hideToLip();
     }
   }), [hideToLip]);
@@ -223,7 +242,7 @@ export default function App() {
   const onMouseLeave = () => {
     hovered.current = false;
     clearTimeout(hoverTimer.current);
-    if (!pinnedRef.current && dragDepth.current === 0) {
+    if (!pinnedRef.current && !jarvisBusyRef.current && dragDepth.current === 0) {
       scheduleHide();
     }
   };
@@ -237,7 +256,7 @@ export default function App() {
     }
   };
 
-  // --- drag & drop from Explorer (works for both Permanent Shortcuts on Home & Temporary Stash) ---
+  // --- drag & drop from Explorer ---
   const isFileDrag = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
   const onDragEnter = (e) => {
     if (!isFileDrag(e)) return;
@@ -350,6 +369,8 @@ export default function App() {
             stashActions={stashActions}
             clipboardItems={clipboardItems}
             clipboardActions={clipboardActions}
+            jarvis={jarvis}
+            voiceTurn={voiceTurn}
             dragOver={dragOver}
             focusToken={focusToken}
             onInputFocus={(v) => { inputFocused.current = v; }}

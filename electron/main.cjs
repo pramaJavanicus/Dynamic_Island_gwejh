@@ -6,7 +6,7 @@
 // (8px high) receives mouse input, so Chrome/browser tabs are never blocked.
 // ---------------------------------------------------------------------------
 const {
-  app, BrowserWindow, ipcMain, screen, Tray, Menu, shell, nativeImage, globalShortcut, dialog, clipboard,
+  app, BrowserWindow, ipcMain, screen, Tray, Menu, shell, nativeImage, globalShortcut, dialog, clipboard, session,
 } = require('electron');
 const fs = require('fs');
 const path = require('path');
@@ -59,9 +59,9 @@ function isStartupEnabled() {
   return fs.existsSync(STARTUP_LNK);
 }
 
-// Window canvas = max expanded island size + room for the shadow
-const WIN_W = 560;
-const WIN_H = 380;
+// Window canvas = max expanded island size (680x340) + room for the shadow
+const WIN_W = 720;
+const WIN_H = 410;
 // Default hit region = tiny top lip so browser tabs underneath are never blocked
 const LIP_SHAPE = [{ x: Math.round((WIN_W - 140) / 2), y: 0, width: 140, height: 8 }];
 
@@ -369,7 +369,7 @@ function registerIpc() {
           messages: [
             {
               role: 'system',
-              content: 'Kamu adalah Gemini, asisten AI pintar di dalam Dynamic Island Windows. Jawab selalu dalam Bahasa Indonesia secara ringkas, rapi, dan langsung ke inti.',
+              content: 'Kamu adalah JARVIS (bertenaga Gemini AI), asisten pintar berbahasa Indonesia di dalam Dynamic Island Windows. Jawab selalu dalam Bahasa Indonesia secara ringkas (maksimal 2-3 kalimat padat kecuali diminta kode), ramah, dan cerdas.',
             },
             ...messages.slice(-8).map((m) => ({
               role: m.role === 'assistant' ? 'assistant' : 'user',
@@ -383,6 +383,57 @@ function registerIpc() {
       return { ok: true, text: text.trim() };
     } catch (err) {
       return { ok: false, error: err.message || 'Gagal terhubung ke layanan AI.' };
+    }
+  });
+
+  // Jarvis Voice STT (16kHz 16-bit mono PCM -> Indonesian/English text)
+  ipcMain.handle('jarvis:transcribe', async (_e, pcmBase64, lang = 'id-ID') => {
+    try {
+      const pcmBuf = Buffer.from(String(pcmBase64 || ''), 'base64');
+      if (pcmBuf.length < 1600) return { ok: false, error: 'Suara terlalu pendek.' };
+      const key = 'AIzaSyBOti4mM-6x9WDnZIjIeyEU21OpBXqWBgw';
+      const url = `http://www.google.com/speech-api/v2/recognize?client=chromium&lang=${encodeURIComponent(lang)}&key=${key}&pFilter=0`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/l16; rate=16000' },
+        body: pcmBuf,
+      });
+      const rawText = await res.text();
+      const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        try {
+          const parsed = JSON.parse(line);
+          const alt = parsed?.result?.[0]?.alternative?.[0];
+          if (alt?.transcript) {
+            return { ok: true, transcript: String(alt.transcript).trim() };
+          }
+        } catch { /* ignore line */ }
+      }
+      return { ok: false, error: 'Suara tidak terdengar jelas, coba bicara lagi.' };
+    } catch (err) {
+      return { ok: false, error: err.message || 'Gagal mengenali suara.' };
+    }
+  });
+
+  // Jarvis Voice TTS (Text -> Indonesian MP3 data URL)
+  ipcMain.handle('jarvis:tts', async (_e, text) => {
+    try {
+      const clean = String(text || '')
+        .replace(/```[\s\S]*?```/g, ' berikut kodenya. ')
+        .replace(/[*#_`~>]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 200);
+      if (!clean) return { ok: false };
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=id&q=${encodeURIComponent(clean)}`;
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+      });
+      if (!res.ok) return { ok: false };
+      const buf = Buffer.from(await res.arrayBuffer());
+      return { ok: true, audioDataUrl: `data:audio/mpeg;base64,${buf.toString('base64')}` };
+    } catch {
+      return { ok: false };
     }
   });
 
@@ -483,6 +534,8 @@ function registerIpc() {
 // -------------------------------------------------------------- lifecycle --
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.zaenal.dynamicisland');
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, callback) => callback(true));
+  session.defaultSession.setPermissionCheckHandler(() => true);
   const cfg = config.load();
   await stash.ensure();
 
@@ -573,10 +626,10 @@ app.whenReady().then(async () => {
     const lipW = config.get()?.edgeZoneWidth || 160;
     const cx = b.x + b.width / 2;
     const inTopLip = pt.y >= b.y && pt.y <= b.y + 12 && Math.abs(pt.x - cx) <= lipW / 2;
-    const inIsland = pt.y >= b.y && pt.y <= b.y + 318 && Math.abs(pt.x - cx) <= 268;
+    const inIsland = pt.y >= b.y && pt.y <= b.y + 358 && Math.abs(pt.x - cx) <= 348;
 
     if (islandExpanded) {
-      // While expanded, keep window interactive whenever cursor is inside the 520x300 island
+      // While expanded, keep window interactive whenever cursor is inside the 680x340 island
       setIgnoreMouse(!inIsland);
     } else {
       // While hidden/peeking, only the top lip is interactive
