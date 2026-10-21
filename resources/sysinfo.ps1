@@ -47,6 +47,27 @@ interface IMMDeviceEnumerator {
 class MMDeviceEnumeratorComObject { }
 
 public static class SysAudioNet {
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    private static bool wasZeroDown = false;
+
+    public static bool CheckZeroHotkey() {
+        bool shift = (GetAsyncKeyState(0x10) & 0x8000) != 0;
+        bool ctrl  = (GetAsyncKeyState(0x11) & 0x8000) != 0;
+        bool alt   = (GetAsyncKeyState(0x12) & 0x8000) != 0;
+        bool zeroDown = ((GetAsyncKeyState(0x30) & 0x8000) != 0) || ((GetAsyncKeyState(0x60) & 0x8000) != 0);
+
+        if (zeroDown && !wasZeroDown && !shift && !ctrl && !alt) {
+            wasZeroDown = true;
+            return true;
+        }
+        if (!zeroDown) {
+            wasZeroDown = false;
+        }
+        return false;
+    }
+
     private static IAudioEndpointVolume GetEp() {
         var enumerator = (IMMDeviceEnumerator)(new MMDeviceEnumeratorComObject());
         IMMDevice dev;
@@ -394,6 +415,11 @@ while ($true) {
         $readTask = $reader.ReadLineAsync()
     }
 
+    if ([SysAudioNet]::CheckZeroHotkey()) {
+        [Console]::Out.WriteLine('{"hotkey":"jarvis"}')
+        [Console]::Out.Flush()
+    }
+
     $now = Get-Date
     if ($now -ge $nextHeavySample) {
         $nextHeavySample = $now.AddSeconds($Interval)
@@ -408,5 +434,5 @@ while ($true) {
         [Console]::Out.WriteLine($json)
         [Console]::Out.Flush()
     }
-    Start-Sleep -Milliseconds 150
+    Start-Sleep -Milliseconds 45
 }

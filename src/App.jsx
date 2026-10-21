@@ -114,6 +114,19 @@ export default function App() {
     jarvisBusyRef.current = jarvis.status !== 'idle';
   }, [jarvis.status]);
 
+  // --- Press "0" anywhere to activate Jarvis voice ---
+  const jarvisToggleRef = useRef(jarvis.toggleListening);
+  useEffect(() => {
+    jarvisToggleRef.current = jarvis.toggleListening;
+  }, [jarvis.toggleListening]);
+
+  useEffect(() => api.jarvis?.onHotkey?.(() => {
+    // Don't hijack "0" while typing inside the island's own inputs (search / Gemini chat / alarm)
+    if (inputFocused.current) return;
+    if (modeRef.current !== 'expanded') expand();
+    jarvisToggleRef.current?.();
+  }), [expand]);
+
   // --- Bluetooth Connection Auto-Popup Notification ---
   const [btAlert, setBtAlert] = useState(null);
   const knownBtRef = useRef(null);

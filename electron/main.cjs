@@ -1204,6 +1204,12 @@ app.whenReady().then(async () => {
   media.start();
 
   sysinfo.on('update', (msg) => {
+    // Global "0" key -> activate Jarvis voice (handled separately so sysState is untouched)
+    if (msg && msg.hotkey === 'jarvis') {
+      showIsland();
+      win?.webContents.send('jarvis:hotkey');
+      return;
+    }
     if (!msg.error) {
       const btRaw = msg.bluetooth;
       const btList = Array.isArray(btRaw)

@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('island', {
     vscode: (opts) => ipcRenderer.invoke('jarvis:vscode', opts),
     power: (opts) => ipcRenderer.invoke('jarvis:power', opts),
     interpret: (text) => ipcRenderer.invoke('jarvis:interpret', text),
+    onHotkey: (cb) => on('jarvis:hotkey', cb),
   },
 
   config: {
