@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Home, Music2, Clock, Layers, Pin, PinOff, Thermometer, Battery, BatteryCharging, Headphones, Bluetooth, ArrowDown,
+  Home, Music2, Clock, Layers, Sparkles, Pin, PinOff, Thermometer, Battery, BatteryCharging, Headphones, Bluetooth, ArrowDown,
 } from 'lucide-react';
 import { formatNetSpeed, useBattery, useClock } from '../hooks.js';
 import { formatMinSec } from '../clockStore.js';
@@ -8,12 +8,14 @@ import HomeTab from './HomeTab.jsx';
 import MediaTab from './MediaTab.jsx';
 import ClockTab from './ClockTab.jsx';
 import StashTab from './StashTab.jsx';
+import GeminiTab from './GeminiTab.jsx';
 
 const TABS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'media', label: 'Music', icon: Music2 },
   { id: 'clock', label: 'Clock', icon: Clock },
   { id: 'stash', label: 'Stash', icon: Layers },
+  { id: 'gemini', label: 'Gemini', icon: Sparkles },
 ];
 
 export default function ExpandedView({
@@ -41,7 +43,7 @@ export default function ExpandedView({
               onDragEnter={() => {
                 if (id === 'home' || id === 'stash') setTab(id);
               }}
-              className="relative z-10 flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-white/75 transition-colors hover:text-white"
+              className="relative z-10 flex items-center gap-1 rounded-full px-1.5 py-1 text-[10.5px] font-medium text-white/75 transition-colors hover:text-white"
             >
               {tab === id && (
                 <motion.span
@@ -50,16 +52,16 @@ export default function ExpandedView({
                   transition={{ type: 'spring', stiffness: 460, damping: 36 }}
                 />
               )}
-              <Icon size={12} />
+              <Icon size={11.5} className={id === 'gemini' ? 'text-indigo-400' : ''} />
               {label}
               {id === 'stash' && stashItems.length > 0 && (
-                <span className="rounded-full bg-sky-500 px-1.5 text-[9.5px] leading-4 text-white">{stashItems.length}</span>
+                <span className="rounded-full bg-sky-500 px-1 text-[9px] leading-3.5 text-white">{stashItems.length}</span>
               )}
               {id === 'media' && media.status === 'Playing' && (
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
               )}
               {id === 'clock' && (clock?.ringing || clock?.timer?.running || clock?.stopwatch?.running) && (
-                <span className="rounded-full bg-amber-400/25 px-1.5 text-[9px] font-semibold tabular-nums text-amber-300">
+                <span className="rounded-full bg-amber-400/25 px-1 text-[8.5px] font-semibold tabular-nums text-amber-300">
                   {clock?.timer?.running ? formatMinSec(clock.timer.left) : '●'}
                 </span>
               )}
@@ -69,17 +71,17 @@ export default function ExpandedView({
 
         <div className="flex items-center gap-1.5">
           {/* Live system status pill (Suhu, Baterai Laptop, Network Speed, Bluetooth) */}
-          <div className="flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-medium text-white/80">
+          <div className="flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-1 text-[9.5px] font-medium text-white/80">
             <span className="flex items-center gap-0.5 tabular-nums" title={`Suhu ~${temp ?? '--'}°C (CPU ${sysinfo?.cpu ?? '--'}%)`}>
-              <Thermometer size={11} className={temp >= 75 ? 'text-rose-400' : temp >= 62 ? 'text-amber-300' : 'text-emerald-400'} />
+              <Thermometer size={10.5} className={temp >= 75 ? 'text-rose-400' : temp >= 62 ? 'text-amber-300' : 'text-emerald-400'} />
               {temp != null ? `${temp}°C` : '--°C'}
             </span>
             {battery && (
               <span className="flex items-center gap-0.5 tabular-nums" title="Baterai Laptop">
                 {battery.charging ? (
-                  <BatteryCharging size={11} className="text-emerald-400" />
+                  <BatteryCharging size={10.5} className="text-emerald-400" />
                 ) : (
-                  <Battery size={11} className={battery.level <= 20 ? 'text-rose-400' : 'text-sky-300'} />
+                  <Battery size={10.5} className={battery.level <= 20 ? 'text-rose-400' : 'text-sky-300'} />
                 )}
                 {battery.level}%
               </span>
@@ -88,7 +90,7 @@ export default function ExpandedView({
               className="flex items-center gap-0.5 tabular-nums text-cyan-300"
               title={`Download: ${formatNetSpeed(netDown)} • Upload: ${formatNetSpeed(netUp)}`}
             >
-              <ArrowDown size={10.5} className="text-cyan-400" />
+              <ArrowDown size={10} className="text-cyan-400" />
               {formatNetSpeed(netDown)}
             </span>
             <span
@@ -97,20 +99,20 @@ export default function ExpandedView({
             >
               {primaryBt ? (
                 <>
-                  <Headphones size={10.5} className="text-indigo-400" />
+                  <Headphones size={10} className="text-indigo-400" />
                   <span className="text-indigo-300">{primaryBt.battery}%</span>
                 </>
               ) : (
-                <Bluetooth size={10.5} className="text-white/30" />
+                <Bluetooth size={10} className="text-white/30" />
               )}
             </span>
           </div>
 
           <div className="text-right leading-tight">
-            <div className="font-display text-[13px] font-semibold tabular-nums">
+            <div className="font-display text-[12.5px] font-semibold tabular-nums">
               {now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div className="text-[9px] text-white/45">
+            <div className="text-[8.5px] text-white/45">
               {now.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
             </div>
           </div>
@@ -166,6 +168,7 @@ export default function ExpandedView({
                 onInputFocus={onInputFocus}
               />
             )}
+            {tab === 'gemini' && <GeminiTab onInputFocus={onInputFocus} />}
           </motion.div>
         </AnimatePresence>
       </div>

@@ -66,6 +66,7 @@ const WIN_H = 380;
 const LIP_SHAPE = [{ x: Math.round((WIN_W - 140) / 2), y: 0, width: 140, height: 8 }];
 
 let win = null;
+let geminiWin = null;
 let tray = null;
 let mediaState = { active: false };
 let sysState = {
@@ -240,6 +241,39 @@ function openFolder(p) {
   }
 }
 
+function openGeminiPopup() {
+  if (geminiWin && !geminiWin.isDestroyed()) {
+    if (geminiWin.isMinimized()) geminiWin.restore();
+    geminiWin.show();
+    geminiWin.focus();
+    return;
+  }
+  const { workArea } = screen.getPrimaryDisplay();
+  const w = 440;
+  const h = 640;
+  geminiWin = new BrowserWindow({
+    x: Math.round(workArea.x + (workArea.width - w) / 2),
+    y: Math.round(workArea.y + 52),
+    width: w,
+    height: h,
+    title: 'Google Gemini',
+    icon: path.join(RES_DIR, 'icon.ico'),
+    autoHideMenuBar: true,
+    alwaysOnTop: true,
+    backgroundColor: '#131314',
+    webPreferences: {
+      partition: 'persist:gemini',
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  geminiWin.setAlwaysOnTop(true, 'floating');
+  geminiWin.loadURL('https://gemini.google.com/app');
+  geminiWin.on('closed', () => {
+    geminiWin = null;
+  });
+}
+
 function registerShortcut() {
   globalShortcut.unregisterAll();
   const accel = config.get().shortcut;
@@ -283,13 +317,74 @@ function registerIpc() {
     win?.focus();
   });
 
-  // Google & folders
+  // Google, Calculator & folders
   ipcMain.on('open:search', (_e, q) => {
     const query = String(q || '').trim();
     if (query) openExternalSafe(`https://www.google.com/search?q=${encodeURIComponent(query)}`);
   });
   ipcMain.on('open:url', (_e, url) => openExternalSafe(url));
   ipcMain.on('open:folder', (_e, p) => openFolder(p));
+  ipcMain.on('open:calc', () => {
+    try {
+      spawn('calc.exe', [], { detached: true, stdio: 'ignore' }).unref();
+    } catch {
+      shell.openExternal('calculator:');
+    }
+  });
+
+  // Gemini AI (In-island quick chat + persistent Google Gemini popup window)
+  ipcMain.on('gemini:open-popup', () => openGeminiPopup());
+  ipcMain.handle('gemini:ask', async (_e, { messages = [], apiKey = '' } = {}) => {
+    try {
+      const cleanKey = String(apiKey || '').trim();
+      if (cleanKey) {
+        const contents = messages.map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: String(m.content || '') }],
+        }));
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(cleanKey)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: {
+                parts: [{ text: 'Kamu adalah Gemini, asisten AI Google di dalam Dynamic Island Windows. Jawab dengan bahasa Indonesia yang jelas, ringkas, dan membantu.' }],
+              },
+              contents,
+            }),
+          },
+        );
+        const data = await res.json();
+        const reply = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
+        if (reply) return { ok: true, text: reply.trim() };
+        return { ok: false, error: data?.error?.message || 'Gagal memanggil Gemini API Key.' };
+      }
+
+      const res = await fetch('https://text.pollinations.ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openai',
+          messages: [
+            {
+              role: 'system',
+              content: 'Kamu adalah Gemini, asisten AI pintar di dalam Dynamic Island Windows. Jawab selalu dalam Bahasa Indonesia secara ringkas, rapi, dan langsung ke inti.',
+            },
+            ...messages.slice(-8).map((m) => ({
+              role: m.role === 'assistant' ? 'assistant' : 'user',
+              content: String(m.content || ''),
+            })),
+          ],
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      return { ok: true, text: text.trim() };
+    } catch (err) {
+      return { ok: false, error: err.message || 'Gagal terhubung ke layanan AI.' };
+    }
+  });
 
   // Config & Saved Shortcuts
   ipcMain.handle('config:get', () => config.get());

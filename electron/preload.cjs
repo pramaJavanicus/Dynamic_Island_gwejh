@@ -20,10 +20,17 @@ contextBridge.exposeInMainWorld('island', {
   onEdgeHover: (cb) => on('island:edge-hover', cb),
   onCursorOutside: (cb) => on('island:cursor-outside', cb),
 
-  // google / folders & apps
+  // google / calculator / folders & apps
   search: (q) => ipcRenderer.send('open:search', q),
   openUrl: (url) => ipcRenderer.send('open:url', url),
   openFolder: (p) => ipcRenderer.send('open:folder', p),
+  openCalc: () => ipcRenderer.send('open:calc'),
+
+  gemini: {
+    ask: (payload) => ipcRenderer.invoke('gemini:ask', payload),
+    openPopup: () => ipcRenderer.send('gemini:open-popup'),
+    openWeb: () => ipcRenderer.send('open:url', 'https://gemini.google.com/app'),
+  },
 
   config: {
     get: () => ipcRenderer.invoke('config:get'),

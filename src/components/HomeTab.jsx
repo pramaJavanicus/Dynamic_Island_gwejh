@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Search, HardDrive, CalendarDays, Mail, Download, FileText, Monitor, Code2, Folder,
-  Image, Music, Video, Settings2, ArrowRight, Plus, X, AppWindow, Volume2, Volume1, VolumeX,
+  Search, HardDrive, CalendarDays, Mail, Calculator, Download, FileText, Monitor, Code2, Folder,
+  Image, Music, Video, Settings2, ArrowRight, Plus, X, AppWindow, Volume2, Volume1, VolumeX, Check,
 } from 'lucide-react';
 
 const api = window.island;
 
-const GOOGLE_APPS = [
-  { name: 'Drive', url: 'https://drive.google.com', icon: HardDrive, color: 'from-yellow-400 via-green-500 to-blue-500' },
-  { name: 'Calendar', url: 'https://calendar.google.com', icon: CalendarDays, color: 'from-blue-500 to-blue-600' },
-  { name: 'Gmail', url: 'https://mail.google.com', icon: Mail, color: 'from-red-500 to-rose-600' },
+const QUICK_APPS = [
+  { name: 'Drive', action: () => api.openUrl('https://drive.google.com'), icon: HardDrive, color: 'from-yellow-400 via-green-500 to-blue-500' },
+  { name: 'Calendar', action: () => api.openUrl('https://calendar.google.com'), icon: CalendarDays, color: 'from-blue-500 to-blue-600' },
+  { name: 'Gmail', action: () => api.openUrl('https://mail.google.com'), icon: Mail, color: 'from-red-500 to-rose-600' },
+  { name: 'Kalkulator', action: () => api.openCalc(), icon: Calculator, color: 'from-amber-400 to-orange-500' },
 ];
 
 const FOLDER_ICONS = {
@@ -17,17 +18,43 @@ const FOLDER_ICONS = {
   folder: Folder, image: Image, music: Music, video: Video, app: AppWindow,
 };
 
+function evalMathExpression(raw) {
+  const s = String(raw || '').trim().replace(/,/g, '.');
+  if (!s || !/[+\-*/%^()]/.test(s) || !/\d/.test(s)) return null;
+  if (!/^[0-9+\-*/%.^()\s]+$/.test(s)) return null;
+  try {
+    const normalized = s.replace(/\^/g, '**');
+    // eslint-disable-next-line no-new-func
+    const val = Function(`"use strict"; return (${normalized});`)();
+    if (typeof val === 'number' && Number.isFinite(val)) {
+      if (String(val) === s) return null;
+      return Number(val.toFixed(8));
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 export default function HomeTab({ config, sysinfo, dragOver, focusToken, onInputFocus }) {
   const [query, setQuery] = useState('');
+  const [copiedCalc, setCopiedCalc] = useState(false);
   const inputRef = useRef(null);
 
   useEffect(() => {
     if (focusToken) inputRef.current?.focus();
   }, [focusToken]);
 
+  const mathResult = useMemo(() => evalMathExpression(query), [query]);
+
   const submit = (e) => {
     e.preventDefault();
     if (!query.trim()) return;
+    if (mathResult !== null) {
+      api.clipboard?.copy(String(mathResult));
+      setCopiedCalc(true);
+      setTimeout(() => setCopiedCalc(false), 1200);
+      setQuery(String(mathResult));
+      return;
+    }
     api.search(query);
     setQuery('');
     inputRef.current?.blur();
@@ -46,7 +73,7 @@ export default function HomeTab({ config, sysinfo, dragOver, focusToken, onInput
 
   return (
     <div className="flex h-full flex-col gap-3">
-      {/* Google search */}
+      {/* Google search + Instant Calculator */}
       <form onSubmit={submit} className="group flex items-center gap-2 rounded-2xl bg-white/[0.08] px-3 py-2.5 ring-1 ring-white/5 focus-within:ring-white/25">
         <Search size={16} className="text-white/50" />
         <input
@@ -55,10 +82,19 @@ export default function HomeTab({ config, sysinfo, dragOver, focusToken, onInput
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => { onInputFocus(true); api.focus(); }}
           onBlur={() => onInputFocus(false)}
-          placeholder="Cari di Google…"
+          placeholder="Cari di Google atau hitung angka (mis: 250 * 14)…"
           spellCheck={false}
-          className="flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-white/35"
+          className="flex-1 bg-transparent text-[13.5px] text-white outline-none placeholder:text-white/35"
         />
+        {mathResult !== null && (
+          <button
+            type="submit"
+            title="Klik atau tekan Enter untuk menyalin hasil"
+            className="flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-0.5 text-[12px] font-semibold tabular-nums text-amber-300 hover:bg-amber-400/30"
+          >
+            {copiedCalc ? <Check size={12} className="text-emerald-400" /> : `= ${mathResult.toLocaleString('id-ID')}`}
+          </button>
+        )}
         {query && (
           <button type="submit" className="grid h-6 w-6 place-items-center rounded-full bg-white text-black">
             <ArrowRight size={14} />
@@ -67,22 +103,25 @@ export default function HomeTab({ config, sysinfo, dragOver, focusToken, onInput
       </form>
 
       <div className="flex min-h-0 flex-1 gap-3">
-        {/* Left: Google apps + Quick Volume Slider */}
-        <div className="flex flex-col justify-between">
+        {/* Left: Google apps + Calculator + Quick Volume Slider */}
+        <div className="flex w-[206px] shrink-0 flex-col justify-between">
           <div className="flex flex-col gap-1.5">
-            <span className="px-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">Google</span>
-            <div className="flex gap-2">
-              {GOOGLE_APPS.map(({ name, url, icon: Icon, color }) => (
+            <span className="px-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+              Google & Tools
+            </span>
+            <div className="grid grid-cols-4 gap-1.5">
+              {QUICK_APPS.map(({ name, action, icon: Icon, color }) => (
                 <button
                   key={name}
                   type="button"
-                  onClick={() => api.openUrl(url)}
-                  className="flex w-[58px] flex-col items-center gap-1.5 rounded-2xl py-1.5 transition hover:bg-white/[0.08] active:scale-95"
+                  onClick={action}
+                  title={`Buka ${name}`}
+                  className="flex flex-col items-center gap-1.5 rounded-2xl py-1.5 transition hover:bg-white/[0.08] active:scale-95"
                 >
                   <span className={`grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br ${color} shadow-lg`}>
-                    <Icon size={19} />
+                    <Icon size={18} />
                   </span>
-                  <span className="text-[11px] text-white/70">{name}</span>
+                  <span className="truncate text-[10px] text-white/75">{name}</span>
                 </button>
               ))}
             </div>
