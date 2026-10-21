@@ -137,7 +137,10 @@ export function useJarvis({
     try {
       if (window.speechSynthesis) {
         const u = new SpeechSynthesisUtterance(String(text).slice(0, 220));
-        u.lang = 'id-ID';
+        u.lang = 'en-GB';
+        const voices = window.speechSynthesis.getVoices?.() || [];
+        const gbVoice = voices.find((v) => v.lang?.startsWith('en-GB')) || voices.find((v) => v.lang?.startsWith('en'));
+        if (gbVoice) u.voice = gbVoice;
         u.onend = () => setStatus('idle');
         u.onerror = () => setStatus('idle');
         window.speechSynthesis.speak(u);
@@ -256,7 +259,7 @@ export function useJarvis({
       setTab('media');
       const res = await api.jarvis.playSpotify(songQuery);
       const trackTitle = res?.title || songQuery;
-      return finishWithAction(`Siap bos, membuka Spotify dan memutar lagu ${trackTitle}.`);
+      return finishWithAction(`Right away, sir. Opening Spotify and playing ${trackTitle}.`);
     }
 
     // 2. Open Browser / Google Chrome + Websites (e.g. "buka google chrome dan buka web whatsapp")
@@ -271,38 +274,38 @@ export function useJarvis({
       }
 
       // Check Youtube search e.g. "buka youtube dan cari ..."
-      const ytSearchMatch = lower.match(/youtube\s+(?:dan\s+|lalu\s+)?(?:cari|putar|search)\s+(.+)/i);
+      const ytSearchMatch = lower.match(/youtube\s+(?:dan\s+|lalu\s+|and\s+)?(?:cari|putar|search)\s+(.+)/i);
       if (ytSearchMatch && ytSearchMatch[1]) {
         const q = ytSearchMatch[1].trim();
         const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
         await api.jarvis.openBrowser({ urls: [url], preferChrome: mentionsChrome });
-        return finishWithAction(`Siap bos, membuka YouTube dan mencari ${q}.`);
+        return finishWithAction(`Right away, sir. Opening YouTube and searching for ${q}.`);
       }
 
       // Check Google search e.g. "buka google chrome dan cari ..."
-      const gSearchMatch = lower.match(/(?:google|chrome)\s+(?:dan\s+|lalu\s+)?(?:cari|search|googling)\s+(.+)/i);
+      const gSearchMatch = lower.match(/(?:google|chrome)\s+(?:dan\s+|lalu\s+|and\s+)?(?:cari|search|googling)\s+(.+)/i);
       if (gSearchMatch && gSearchMatch[1] && !gSearchMatch[1].startsWith('buka ')) {
         const q = gSearchMatch[1].trim();
         const url = `https://www.google.com/search?q=${encodeURIComponent(q)}`;
         await api.jarvis.openBrowser({ urls: [url], preferChrome: mentionsChrome });
-        return finishWithAction(`Siap bos, mencari ${q} di Google.`);
+        return finishWithAction(`Certainly, sir. Searching Google for ${q}.`);
       }
 
       if (matchedSites.length > 0) {
         const urls = matchedSites.map((s) => s.url);
-        const names = matchedSites.map((s) => s.name).join(' dan ');
+        const names = matchedSites.map((s) => s.name).join(' and ');
         await api.jarvis.openBrowser({ urls, preferChrome: mentionsChrome });
         return finishWithAction(
           mentionsChrome
-            ? `Siap bos, membuka Google Chrome dan menuju ke ${names}.`
-            : `Siap bos, membuka ${names}.`,
+            ? `Right away, sir. Opening Google Chrome and launching ${names}.`
+            : `Right away, sir. Opening ${names}.`,
         );
       }
 
       // Just "buka google chrome" or "buka google"
-      if (mentionsChrome || /\bbuka\s+google\b/.test(lower)) {
+      if (mentionsChrome || /\b(buka|open)\s+google\b/.test(lower)) {
         await api.jarvis.openBrowser({ urls: ['https://www.google.com'], preferChrome: true });
-        return finishWithAction('Siap bos, Google Chrome sudah dibuka.');
+        return finishWithAction('Right away, sir. Google Chrome is now open.');
       }
     }
 
@@ -310,95 +313,100 @@ export function useJarvis({
     if ((/\b(kalkulator|calculator)\b/.test(lower) && mentionsOpen) || lower === 'kalkulator' || lower === 'calculator') {
       api.openCalc();
       setTab('home');
-      return finishWithAction('Siap bos, kalkulator sudah dibuka.');
+      return finishWithAction('Right away, sir. Calculator is now open.');
     }
 
     // 4. General Spotify / Music controls (without a specific song title)
     if (/\b(buka spotify|open spotify)\b/.test(lower)) {
       api.media.command('open-spotify');
       setTab('media');
-      return finishWithAction('Siap, membuka Spotify.');
+      return finishWithAction('Right away, sir. Opening Spotify.');
     }
-    if (/\b(putar|play|lanjutkan|nyalakan)\s+(musik|lagu|spotify)\b/.test(lower) || lower === 'play' || lower === 'putar musik') {
+    if (/\b(putar|play|lanjutkan|nyalakan)\s+(musik|lagu|spotify|music)\b/.test(lower) || lower === 'play' || lower === 'putar musik') {
       api.media.command('play');
       setTab('media');
-      return finishWithAction('Siap, memutar musik.');
+      return finishWithAction('Playing music now, sir.');
     }
-    if (/\b(pause|jeda|hentikan|stop|matikan)\s+(musik|lagu|spotify)\b/.test(lower) || lower === 'pause') {
+    if (/\b(pause|jeda|hentikan|stop|matikan)\s+(musik|lagu|spotify|music)\b/.test(lower) || lower === 'pause') {
       api.media.command('pause');
-      return finishWithAction('Musik sudah dijeda.');
+      return finishWithAction('Music paused, sir.');
     }
-    if (/\b(next|skip|selanjutnya|berikutnya|ganti)\s*(lagu|musik)?\b/.test(lower) && /\b(lagu|musik|next|skip)\b/.test(lower)) {
+    if (/\b(next|skip|selanjutnya|berikutnya|ganti)\s*(lagu|musik|song|track)?\b/.test(lower) && /\b(lagu|musik|next|skip|song|track)\b/.test(lower)) {
       api.media.command('next');
       setTab('media');
-      return finishWithAction('Mengganti ke lagu berikutnya.');
+      return finishWithAction('Skipping to the next track, sir.');
     }
-    if (/\b(prev|previous|sebelumnya)\s*(lagu|musik)?\b/.test(lower)) {
+    if (/\b(prev|previous|sebelumnya)\s*(lagu|musik|song|track)?\b/.test(lower)) {
       api.media.command('prev');
       setTab('media');
-      return finishWithAction('Kembali ke lagu sebelumnya.');
+      return finishWithAction('Going back to the previous track, sir.');
     }
 
     // 5. Timer / Stopwatch / Alarm
-    const timerMatch = lower.match(/timer\s+(\d+)\s*(menit|detik|jam|minute|second)/i);
+    const timerMatch = lower.match(/timer\s+(\d+)\s*(menit|detik|jam|minute|minutes|second|seconds|hour|hours)/i);
     if (timerMatch) {
       const num = parseInt(timerMatch[1], 10);
       const unit = timerMatch[2].toLowerCase();
-      const secs = unit.startsWith('jam')
+      const secs = unit.startsWith('jam') || unit.startsWith('hour')
         ? num * 3600
         : unit.startsWith('det') || unit.startsWith('sec')
           ? num
           : num * 60;
+      const enUnit = unit.startsWith('jam') || unit.startsWith('hour')
+        ? 'hours'
+        : unit.startsWith('det') || unit.startsWith('sec')
+          ? 'seconds'
+          : 'minutes';
       if (secs > 0) {
         clock?.timer?.startPreset(secs);
         setTab('clock');
-        return finishWithAction(`Siap bos, timer ${num} ${unit} sudah dimulai.`);
+        return finishWithAction(`Timer set for ${num} ${enUnit}, sir.`);
       }
     }
     if (/\b(stop|hentikan|reset|matikan)\s+timer\b/.test(lower)) {
       clock?.timer?.reset();
       setTab('clock');
-      return finishWithAction('Timer sudah dihentikan.');
+      return finishWithAction('Timer has been stopped, sir.');
     }
     if (/\b(mulai|jalankan|start)\s+stopwatch\b/.test(lower)) {
       if (!clock?.stopwatch?.running) clock?.stopwatch?.toggle();
       setTab('clock');
-      return finishWithAction('Stopwatch dimulai.');
+      return finishWithAction('Stopwatch started, sir.');
     }
     if (/\b(stop|hentikan|reset)\s+stopwatch\b/.test(lower)) {
       clock?.stopwatch?.reset();
       setTab('clock');
-      return finishWithAction('Stopwatch direset.');
+      return finishWithAction('Stopwatch has been reset, sir.');
     }
-    const alarmMatch = lower.match(/alarm\s+(?:jam\s+|pukul\s+)?(\d{1,2})(?:[:.](\d{2}))?/i);
+    const alarmMatch = lower.match(/alarm\s+(?:jam\s+|pukul\s+|at\s+|for\s+)?(\d{1,2})(?:[:.](\d{2}))?/i);
     if (alarmMatch) {
       const hh = String(Math.min(23, parseInt(alarmMatch[1], 10))).padStart(2, '0');
       const mm = String(Math.min(59, parseInt(alarmMatch[2] || '0', 10))).padStart(2, '0');
       clock?.alarms?.add(`${hh}:${mm}`, 'Jarvis Alarm');
       setTab('clock');
-      return finishWithAction(`Siap, alarm pukul ${hh}:${mm} sudah dipasang.`);
+      return finishWithAction(`Alarm set for ${hh}:${mm}, sir.`);
     }
 
     // 6. Volume & Mute
-    const volMatch = lower.match(/volume\s*(?:ke|jadi|di)?\s*(\d{1,3})/);
+    const volMatch = lower.match(/volume\s*(?:ke|jadi|di|to|at)?\s*(\d{1,3})/);
     if (volMatch) {
       const v = Math.max(0, Math.min(100, parseInt(volMatch[1], 10)));
       api.sysinfo.setVolume(v);
-      return finishWithAction(`Volume diatur ke ${v} persen.`);
+      return finishWithAction(`Volume set to ${v} percent, sir.`);
     }
     if (/\b(mute|bisukan|matikan suara)\b/.test(lower)) {
       api.sysinfo.toggleMute();
-      return finishWithAction('Status mute suara diubah.');
+      return finishWithAction('Audio mute toggled, sir.');
     }
-    if (/\b(besarkan|naikkan|tambah)\s+(volume|suara)\b/.test(lower)) {
+    if (/\b(besarkan|naikkan|tambah|increase|raise)\s+(volume|suara)\b/.test(lower)) {
       const nextV = Math.min(100, (sysinfo?.volume ?? 50) + 20);
       api.sysinfo.setVolume(nextV);
-      return finishWithAction(`Volume dinaikkan ke ${nextV} persen.`);
+      return finishWithAction(`Volume increased to ${nextV} percent, sir.`);
     }
-    if (/\b(kecilkan|turunkan|kurangi)\s+(volume|suara)\b/.test(lower)) {
+    if (/\b(kecilkan|turunkan|kurangi|decrease|lower)\s+(volume|suara)\b/.test(lower)) {
       const nextV = Math.max(0, (sysinfo?.volume ?? 50) - 20);
       api.sysinfo.setVolume(nextV);
-      return finishWithAction(`Volume dikecilkan ke ${nextV} persen.`);
+      return finishWithAction(`Volume lowered to ${nextV} percent, sir.`);
     }
 
     // 7. Saved Shortcuts & Desktop Apps
@@ -407,7 +415,7 @@ export function useJarvis({
       const fname = String(f.name || '').toLowerCase();
       if (fname && mentionsOpen && lower.includes(fname)) {
         api.openFolder(f.path);
-        return finishWithAction(`Siap, membuka ${f.name}.`);
+        return finishWithAction(`Right away, sir. Opening ${f.name}.`);
       }
     }
 
@@ -416,7 +424,7 @@ export function useJarvis({
     if (plan?.ok) {
       if (Array.isArray(plan.actions) && plan.actions.length > 0) {
         await executeStructuredActions(plan.actions);
-        return finishWithAction(plan.reply || 'Siap bos, perintah sudah dijalankan.');
+        return finishWithAction(plan.reply || 'Right away, sir.');
       }
       if (plan.reply) {
         if (!skipAutoChatSwitch) {
@@ -437,7 +445,7 @@ export function useJarvis({
     });
     const reply = res?.ok && res.text
       ? res.text
-      : `Maaf bos, gagal memproses jawaban: ${res?.error || 'Koneksi terputus.'}`;
+      : 'Apologies, sir. I could not reach the server at the moment.';
     return finishWithAction(reply);
   }, [clock, config, executeStructuredActions, onVoiceChatTurn, setPinned, setTab, speak, sysinfo]);
 

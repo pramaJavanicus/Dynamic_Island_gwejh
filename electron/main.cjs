@@ -516,7 +516,7 @@ function registerIpc() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               systemInstruction: {
-                parts: [{ text: 'Kamu adalah Gemini, asisten AI Google di dalam Dynamic Island Windows. Jawab dengan bahasa Indonesia yang jelas, ringkas, dan membantu.' }],
+                parts: [{ text: 'You are J.A.R.V.I.S. (powered by Gemini AI) inside Windows Dynamic Island. The user may speak or write in Indonesian or English, and you should always reply in natural, concise, polite English (like Iron Man\'s JARVIS, e.g., "Right away, sir.") unless explicitly asked to write in Indonesian.' }],
               },
               contents,
             }),
@@ -525,7 +525,7 @@ function registerIpc() {
         const data = await res.json();
         const reply = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
         if (reply) return { ok: true, text: reply.trim() };
-        return { ok: false, error: data?.error?.message || 'Gagal memanggil Gemini API Key.' };
+        return { ok: false, error: data?.error?.message || 'Failed to call Gemini API Key.' };
       }
 
       const res = await fetch('https://text.pollinations.ai/', {
@@ -536,7 +536,7 @@ function registerIpc() {
           messages: [
             {
               role: 'system',
-              content: 'Kamu adalah JARVIS (bertenaga Gemini AI), asisten pintar berbahasa Indonesia di dalam Dynamic Island Windows. Jawab selalu dalam Bahasa Indonesia secara ringkas (maksimal 2-3 kalimat padat kecuali diminta kode), ramah, dan cerdas.',
+              content: 'You are J.A.R.V.I.S. (powered by Gemini AI), an intelligent assistant inside Windows Dynamic Island. Even if the user speaks or types in Indonesian, always reply in crisp, natural, polite English (2-3 sentences max unless asked for code) like Tony Stark\'s JARVIS.',
             },
             ...messages.slice(-8).map((m) => ({
               role: m.role === 'assistant' ? 'assistant' : 'user',
@@ -582,17 +582,17 @@ function registerIpc() {
     }
   });
 
-  // Jarvis Voice TTS (Text -> Indonesian MP3 data URL)
+  // Jarvis Voice TTS (Text -> British English MP3 data URL)
   ipcMain.handle('jarvis:tts', async (_e, text) => {
     try {
       const clean = String(text || '')
-        .replace(/```[\s\S]*?```/g, ' berikut kodenya. ')
+        .replace(/```[\s\S]*?```/g, ' Here is the code. ')
         .replace(/[*#_`~>]/g, '')
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 200);
       if (!clean) return { ok: false };
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=id&q=${encodeURIComponent(clean)}`;
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en-GB&q=${encodeURIComponent(clean)}`;
       const res = await fetch(url, {
         headers: { 'User-Agent': 'Mozilla/5.0' },
       });
@@ -621,9 +621,9 @@ function registerIpc() {
     try {
       const sysPrompt = [
         'Kamu adalah otak perencana aksi JARVIS untuk desktop Windows.',
-        'Tugasmu: ubah perintah suara user menjadi JSON murni (TANPA ```json atau teks lain di luar JSON).',
+        'Tugasmu: ubah perintah suara user (baik Bahasa Indonesia maupun Inggris) menjadi JSON murni (TANPA ```json atau teks lain di luar JSON).',
         'Format JSON:',
-        '{"actions":[...],"reply":"Kalimat balasan singkat dan ramah ala Jarvis dalam Bahasa Indonesia"}',
+        '{"actions":[...],"reply":"Short, natural, polite English reply like Iron Man\'s J.A.R.V.I.S. (e.g. Right away, sir. Opening Google Chrome and WhatsApp Web.)"}',
         'Jenis object di dalam array "actions" yang didukung:',
         '1. {"type":"open_browser","preferChrome":true,"urls":["https://..."]} -> jika user minta buka Chrome / browser dan/atau membuka situs web (misal Web WhatsApp = https://web.whatsapp.com, YouTube = https://www.youtube.com, Google = https://www.google.com, Instagram = https://www.instagram.com, GitHub = https://github.com, ChatGPT = https://chatgpt.com, Gmail = https://mail.google.com, Drive = https://drive.google.com, dll). Jika user bilang "buka google chrome dan buka web whatsapp", gabungkan jadi 1 aksi {"type":"open_browser","preferChrome":true,"urls":["https://web.whatsapp.com"]}.',
         '2. {"type":"play_spotify","query":"judul lagu dan/atau artis"} -> jika user minta buka Spotify dan putar lagu tertentu, atau minta putar lagu dengan judul tertentu.',
@@ -658,7 +658,7 @@ function registerIpc() {
         return {
           ok: true,
           actions: Array.isArray(parsed.actions) ? parsed.actions : [],
-          reply: String(parsed.reply || 'Siap bos, sudah dijalankan.'),
+          reply: String(parsed.reply || 'Right away, sir.'),
         };
       }
       return { ok: true, actions: [], reply: raw };
