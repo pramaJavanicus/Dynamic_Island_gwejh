@@ -297,6 +297,61 @@ function findVsCodeExe() {
   return null;
 }
 
+function spawnVsCodeClean(args = []) {
+  const cleanEnv = { ...process.env };
+  delete cleanEnv.ELECTRON_RUN_AS_NODE;
+  const codeExe = findVsCodeExe();
+  if (codeExe) {
+    spawn(codeExe, ['--reuse-window', ...args.filter(Boolean)], {
+      detached: true,
+      stdio: 'ignore',
+      env: cleanEnv,
+    }).unref();
+  } else {
+    spawn('cmd.exe', ['/c', 'code', '--reuse-window', ...args.filter(Boolean)], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      env: cleanEnv,
+    }).unref();
+  }
+}
+
+function fileUriToPath(uri) {
+  if (!uri || typeof uri !== 'string' || !uri.startsWith('file://')) return null;
+  try {
+    const u = new URL(uri);
+    let p = decodeURIComponent(u.pathname);
+    if (/^\/[a-zA-Z]:/.test(p)) p = p.slice(1);
+    return path.normalize(p);
+  } catch {
+    return null;
+  }
+}
+
+function findFileInFolder(rootDir, targetFileName, maxDepth = 3) {
+  if (!rootDir || !targetFileName || !fs.existsSync(rootDir)) return null;
+  const targetLower = targetFileName.toLowerCase();
+  const walk = (dir, depth) => {
+    if (depth > maxDepth) return null;
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+    for (const e of entries) {
+      if (e.isFile() && e.name.toLowerCase() === targetLower) {
+        return path.join(dir, e.name);
+      }
+    }
+    for (const e of entries) {
+      if (e.isDirectory() && !['node_modules', '.git', '.next', 'dist', 'release', 'build'].includes(e.name)) {
+        const hit = walk(path.join(dir, e.name), depth + 1);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  };
+  return walk(rootDir, 0);
+}
+
 function execVsCodePs1(args = []) {
   return new Promise((resolve) => {
     const scriptPath = path.join(RES_DIR, 'vscode.ps1');
@@ -309,7 +364,7 @@ function execVsCodePs1(args = []) {
         '-File', scriptPath,
         ...args,
       ],
-      { timeout: 15000, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
+      { timeout: 10000, maxBuffer: 2 * 1024 * 1024, windowsHide: true },
       (_err, stdout) => {
         try {
           const lines = String(stdout || '').trim().split('\n').filter(Boolean);
@@ -323,41 +378,170 @@ function execVsCodePs1(args = []) {
   });
 }
 
+async function resolveVsCodeContext() {
+  const status = await execVsCodePs1(['-Action', 'status']);
+  const rawTitle = String(status?.title || '').trim();
+  const cleanTitle = rawTitle.replace(/\s*-\s*Visual Studio Code.*$/i, '').replace(/^[●•*]\s*/, '').trim();
+  const parts = cleanTitle ? cleanTitle.split(/\s+-\s+/).map((s) => s.trim()).filter(Boolean) : [];
+  const activeFileName = parts.length >= 1 && parts[0].includes('.') ? parts[0] : '';
+  const activeFolderHint = parts.length >= 2 ? parts[1] : (parts.length === 1 && !parts[0].includes('.') ? parts[0] : '');
+
+  // 1. Collect workspace folders from VS Code storage.json
+  const folders = [];
+  const addFolder = (uriOrPath) => {
+    const p = uriOrPath?.startsWith('file://') ? fileUriToPath(uriOrPath) : uriOrPath;
+    if (p && fs.existsSync(p) && !folders.includes(p)) folders.push(p);
+  };
+
+  try {
+    const storagePath = path.join(app.getPath('appData'), 'Code', 'User', 'globalStorage', 'storage.json');
+    if (fs.existsSync(storagePath)) {
+      const storage = JSON.parse(fs.readFileSync(storagePath, 'utf8'));
+      for (const w of storage?.windowsState?.openedWindows || []) addFolder(w?.folder);
+      addFolder(storage?.windowsState?.lastActiveWindow?.folder);
+      for (const f of storage?.backupWorkspaces?.folders || []) addFolder(f?.folderUri);
+    }
+  } catch { /* ignore */ }
+
+  // Prioritize folder matching active window title
+  let bestFolder = folders[0] || '';
+  if (activeFolderHint) {
+    const matchFolder = folders.find((f) => path.basename(f).toLowerCase() === activeFolderHint.toLowerCase());
+    if (matchFolder) bestFolder = matchFolder;
+  }
+
+  // 2. Collect recently edited files from VS Code History
+  const recentFiles = [];
+  try {
+    const historyRoot = path.join(app.getPath('appData'), 'Code', 'User', 'History');
+    if (fs.existsSync(historyRoot)) {
+      const dirs = fs.readdirSync(historyRoot, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => {
+          const entriesPath = path.join(historyRoot, d.name, 'entries.json');
+          let mtime = 0;
+          try { mtime = fs.statSync(entriesPath).mtimeMs; } catch { return null; }
+          return { entriesPath, mtime };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.mtime - a.mtime)
+        .slice(0, 20);
+
+      for (const item of dirs) {
+        try {
+          const data = JSON.parse(fs.readFileSync(item.entriesPath, 'utf8'));
+          const fp = fileUriToPath(data?.resource);
+          const fpLower = (fp || '').toLowerCase();
+          if (
+            fp
+            && fs.existsSync(fp)
+            && !fpLower.includes('dynamic-island')
+            && !fpLower.includes('\\node_modules\\')
+            && !fpLower.includes('\\generated\\')
+            && !fpLower.includes('\\.next\\')
+            && !fpLower.endsWith('package-lock.json')
+          ) {
+            let fileMtime = item.mtime;
+            try { fileMtime = Math.max(fileMtime, fs.statSync(fp).mtimeMs); } catch { /* ignore */ }
+            recentFiles.push({ filePath: fp, mtime: fileMtime });
+          }
+        } catch { /* ignore */ }
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 3. Resolve exact target file on disk
+  let targetFile = null;
+  if (activeFileName) {
+    if (bestFolder) {
+      targetFile = findFileInFolder(bestFolder, activeFileName);
+    }
+    if (!targetFile) {
+      const hit = recentFiles.find((r) => path.basename(r.filePath).toLowerCase() === activeFileName.toLowerCase());
+      if (hit) targetFile = hit.filePath;
+    }
+    if (!targetFile) {
+      for (const f of folders) {
+        targetFile = findFileInFolder(f, activeFileName);
+        if (targetFile) {
+          bestFolder = f;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!targetFile && activeFolderHint && bestFolder) {
+    const inBestFolder = recentFiles.find((r) => r.filePath.toLowerCase().startsWith(bestFolder.toLowerCase()));
+    if (inBestFolder) targetFile = inBestFolder.filePath;
+  }
+
+  if (!targetFile && recentFiles.length > 0) {
+    recentFiles.sort((a, b) => b.mtime - a.mtime);
+    targetFile = recentFiles[0].filePath;
+    const matchingWs = folders.find((f) => targetFile.toLowerCase().startsWith(f.toLowerCase()));
+    if (matchingWs) bestFolder = matchingWs;
+  }
+
+  if (targetFile && !bestFolder) {
+    bestFolder = path.dirname(targetFile);
+  }
+
+  return {
+    running: !!status?.running,
+    hasFolderWindow: rawTitle.includes(' - '),
+    folderPath: bestFolder,
+    filePath: targetFile,
+    title: rawTitle,
+  };
+}
+
 async function runVsCodeAutomation({ action = 'open', instruction = '' } = {}) {
   const act = String(action || 'open').toLowerCase().trim();
+  const ctx = await resolveVsCodeContext();
+
   if (act === 'open' || act === 'format' || act === 'terminal') {
-    const res = await execVsCodePs1(['-Action', act]);
-    return { ok: true, ...res };
+    if (ctx.running && ctx.hasFolderWindow) {
+      await execVsCodePs1(['-Action', 'open']);
+    } else {
+      spawnVsCodeClean([ctx.folderPath, ctx.filePath]);
+    }
+    return { ok: true, folderPath: ctx.folderPath, filePath: ctx.filePath };
   }
 
   if (act === 'fix') {
-    // 1. Read the current code from the active VS Code editor
-    const readRes = await execVsCodePs1(['-Action', 'read']);
-    if (!readRes?.ok || !readRes.code) {
+    if (!ctx.filePath || !fs.existsSync(ctx.filePath)) {
       return {
         ok: false,
-        reply: 'Please make sure Visual Studio Code is open with the code file you want me to fix, sir.',
+        reply: 'Please open the code file you want me to fix in Visual Studio Code first, sir.',
       };
     }
 
-    // 2. Ask AI to fix the broken code and return pure corrected source code
-    const fileHint = String(readRes.title || '').replace(/\s*-\s*Visual Studio Code.*$/i, '').trim();
+    const originalCode = fs.readFileSync(ctx.filePath, 'utf8');
+    if (!originalCode.trim()) {
+      return {
+        ok: false,
+        reply: `The file ${path.basename(ctx.filePath)} is currently empty, sir.`,
+      };
+    }
+
+    const fileName = path.basename(ctx.filePath);
     const sysPrompt = [
       'You are J.A.R.V.I.S., an expert senior software engineer integrated into Visual Studio Code.',
-      'Your task: Fix all syntax errors, bugs, typos, missing brackets/semicolons/imports, and logic errors in the user\'s code, or apply the user\'s requested modification.',
+      'Your task: Fix all syntax errors, TypeScript/type errors, runtime bugs, null/undefined issues, and logic bugs in the user\'s code, or apply the user\'s requested modification.',
       'IMPORTANT RULES:',
       '1. Return ONLY the complete, corrected source code ready to be saved directly into the file.',
-      '2. Do NOT wrap the output in ``` markdown fences or add conversational text before/after the code.',
-      '3. Preserve the programming language, indentation style, and intended functionality.',
+      '2. Do NOT wrap the output in ``` markdown fences or add any conversational text before/after the code.',
+      '3. Preserve the programming language, comments, and intended structure.',
     ].join('\n');
 
     const userPrompt = [
-      fileHint ? `File / Window: ${fileHint}` : '',
-      instruction ? `User request: ${instruction}` : 'Fix all errors and bugs in this code.',
+      `File: ${fileName} (${ctx.filePath})`,
+      instruction ? `User request: ${instruction}` : 'Fix all errors, type complaints, and bugs in this code.',
       '--- CODE START ---',
-      readRes.code,
+      originalCode,
       '--- CODE END ---',
-    ].filter(Boolean).join('\n');
+    ].join('\n');
 
     const res = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
@@ -375,7 +559,6 @@ async function runVsCodeAutomation({ action = 'open', instruction = '' } = {}) {
     }
 
     let fixedCode = (await res.text()).trim();
-    // Strip markdown code block fences if the model included them
     const fenceMatch = fixedCode.match(/^```[a-zA-Z0-9_-]*\r?\n([\s\S]*?)\r?\n```$/);
     if (fenceMatch && fenceMatch[1]) {
       fixedCode = fenceMatch[1];
@@ -387,15 +570,20 @@ async function runVsCodeAutomation({ action = 'open', instruction = '' } = {}) {
       return { ok: false, reply: 'I could not generate a valid fix for the current file, sir.' };
     }
 
-    // 3. Write the fixed code back into the active VS Code editor and save
-    const tmpFile = path.join(app.getPath('temp'), `jarvis_vscode_fix_${Date.now()}.txt`);
-    fs.writeFileSync(tmpFile, fixedCode, 'utf8');
-    await execVsCodePs1(['-Action', 'write', '-CodeFile', tmpFile]);
-    try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+    // Write the fixed code directly to the file on disk (VS Code automatically hot-reloads it!)
+    fs.writeFileSync(ctx.filePath, fixedCode, 'utf8');
+
+    // Make sure the workspace folder & fixed file are open and visible in VS Code
+    if (!ctx.running || !ctx.hasFolderWindow) {
+      spawnVsCodeClean([ctx.folderPath, ctx.filePath]);
+    } else {
+      await execVsCodePs1(['-Action', 'open']);
+    }
 
     return {
       ok: true,
-      reply: 'Done, sir. I have fixed and saved your code directly in Visual Studio Code.',
+      filePath: ctx.filePath,
+      reply: `Done, sir. I have fixed all the errors in ${fileName} directly in Visual Studio Code.`,
     };
   }
 
@@ -521,12 +709,7 @@ function launchSystemOrUserApp(appName) {
     || key.includes('visual studio code')
     || key.includes('visual code')
   ) {
-    const codeExe = findVsCodeExe();
-    if (codeExe) {
-      spawn(codeExe, [], { detached: true, stdio: 'ignore' }).unref();
-    } else {
-      spawn('cmd.exe', ['/c', 'code'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
-    }
+    runVsCodeAutomation({ action: 'open' });
     return true;
   }
   if (key.includes('spotify')) {

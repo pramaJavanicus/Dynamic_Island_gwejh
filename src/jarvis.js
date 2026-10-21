@@ -778,8 +778,8 @@ export function useJarvis({
 
     // Fix broken code directly inside the active VS Code editor
     if (
-      /\b(perbaiki|benerin|betulkan|benarkan|fix|debug|solve|koreksi)\b.*\b(kode|code|kodingan|codingan|program|script|error|bug|salah)\b/i.test(lower)
-      || /\b(kode|code|kodingan|codingan|program|script)\b.*\b(salah|error|bug|rusak|perbaiki|benerin|betulkan|fix)\b/i.test(lower)
+      /\b(perbaiki|diperbaiki|benerin|dibenerin|betulkan|benarkan|fix|debug|solve|koreksi)\b.*\b(kode|code|koding|coding|program|script|error|eror|bug|salah|vscode|vs\s*code|file)/i.test(lower)
+      || /\b(kode|code|koding|coding|program|script).*\b(salah|error|eror|bug|rusak|perbaiki|diperbaiki|benerin|betulkan|fix)/i.test(lower)
     ) {
       speak('Analyzing and fixing your code in Visual Studio Code now, sir.');
       const res = await api.jarvis.vscode({ action: 'fix', instruction: clean });
