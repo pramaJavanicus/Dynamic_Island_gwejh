@@ -57,6 +57,13 @@ export default function GeminiTab({ jarvis, voiceTurn, onInputFocus }) {
     setMessages(nextMsgs);
     setLoading(true);
     try {
+      if (jarvis?.handleCommand) {
+        const res = await jarvis.handleCommand(prompt, { skipAutoChatSwitch: true });
+        if (res?.reply) {
+          setMessages((prev) => [...prev, { role: 'assistant', content: res.reply }]);
+          return;
+        }
+      }
       const res = await api.gemini.ask({ messages: nextMsgs });
       if (res?.ok && res.text) {
         setMessages((prev) => [...prev, { role: 'assistant', content: res.text }]);

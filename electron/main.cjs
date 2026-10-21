@@ -10,7 +10,7 @@ const {
 } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const config = require('./config.cjs');
 const stash = require('./stash.cjs');
 const lyrics = require('./lyrics.cjs');
@@ -76,7 +76,7 @@ let clipboardHistory = [];
 let lastClipboardText = '';
 
 const media = new PsBridge(path.join(RES_DIR, 'media.ps1'), {
-  commands: ['toggle', 'play', 'pause', 'next', 'prev', 'refresh'],
+  commands: ['toggle', 'play', 'pause', 'next', 'prev', 'refresh', 'play-track', 'play-search'],
 });
 const sysinfo = new PsBridge(path.join(RES_DIR, 'sysinfo.ps1'), {
   args: ['10'],
@@ -226,6 +226,173 @@ function openExternalSafe(url) {
     const u = new URL(url);
     if (['https:', 'http:', 'mailto:', 'spotify:'].includes(u.protocol)) shell.openExternal(u.toString());
   } catch { /* ignore invalid urls */ }
+}
+
+function findChromeExe() {
+  const candidates = [
+    path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Google\\Chrome\\Application\\chrome.exe'),
+    path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Google\\Chrome\\Application\\chrome.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Google\\Chrome\\Application\\chrome.exe'),
+  ];
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+function openBrowserUrls(urls = [], preferChrome = false) {
+  const validUrls = urls.filter(Boolean);
+  const chromeExe = preferChrome ? findChromeExe() : null;
+  if (chromeExe) {
+    const args = validUrls.length ? validUrls : ['https://www.google.com'];
+    spawn(chromeExe, args, { detached: true, stdio: 'ignore' }).unref();
+    return;
+  }
+  if (validUrls.length === 0) {
+    openExternalSafe('https://www.google.com');
+  } else {
+    for (const u of validUrls) openExternalSafe(u);
+  }
+}
+
+function curlGet(url) {
+  return new Promise((resolve) => {
+    execFile(
+      'curl.exe',
+      [
+        '-skL',
+        '--max-time', '6',
+        '-A', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        url,
+      ],
+      { maxBuffer: 4 * 1024 * 1024, windowsHide: true },
+      (_err, stdout) => resolve(String(stdout || '')),
+    );
+  });
+}
+
+async function resolveAndPlaySpotify(rawQuery) {
+  const q = String(rawQuery || '').trim();
+  if (!q) {
+    openExternalSafe('spotify:');
+    return { ok: true, title: 'Spotify' };
+  }
+  try {
+    const searchUrl = `https://search.brave.com/search?q=${encodeURIComponent(`site:open.spotify.com/track ${q}`)}`;
+    const html = await curlGet(searchUrl);
+    const m = html.match(/open\.spotify\.com\/(?:intl-[a-z-]+\/)?track\/([A-Za-z0-9]{22})/i);
+    if (m && m[1]) {
+      const trackId = m[1];
+      let title = q;
+      try {
+        const oembedRaw = await curlGet(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${trackId}`);
+        const oembed = JSON.parse(oembedRaw);
+        if (oembed?.title) title = oembed.title;
+      } catch { /* ignore */ }
+      media.send(`play-track:${trackId}`);
+      return { ok: true, trackId, title };
+    }
+  } catch { /* fallback to play-search */ }
+
+  media.send(`play-search:${q}`);
+  return { ok: true, trackId: null, title: q };
+}
+
+function findStartMenuShortcut(appName) {
+  const clean = String(appName || '').toLowerCase().trim();
+  if (!clean) return null;
+  const roots = [
+    path.join(process.env.APPDATA || '', 'Microsoft\\Windows\\Start Menu\\Programs'),
+    path.join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'Microsoft\\Windows\\Start Menu\\Programs'),
+  ];
+  const walk = (dir, depth = 0) => {
+    if (depth > 3 || !fs.existsSync(dir)) return null;
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        const found = walk(full, depth + 1);
+        if (found) return found;
+      } else if (e.name.toLowerCase().endsWith('.lnk')) {
+        const base = path.parse(e.name).name.toLowerCase();
+        if (base === clean || base.includes(clean)) return full;
+      }
+    }
+    return null;
+  };
+  for (const r of roots) {
+    const hit = walk(r);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function launchSystemOrUserApp(appName) {
+  const key = String(appName || '').toLowerCase().trim();
+  if (!key) return false;
+  if (key.includes('chrome')) {
+    openBrowserUrls([], true);
+    return true;
+  }
+  if (key.includes('edge')) {
+    spawn('cmd.exe', ['/c', 'start', 'msedge'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    return true;
+  }
+  if (key.includes('calc') || key.includes('kalkulator')) {
+    spawn('calc.exe', [], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  }
+  if (key.includes('notepad') || key.includes('catatan')) {
+    spawn('notepad.exe', [], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  }
+  if (key.includes('explorer') || key.includes('file')) {
+    spawn('explorer.exe', [], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  }
+  if (key.includes('setting') || key.includes('pengaturan')) {
+    shell.openExternal('ms-settings:');
+    return true;
+  }
+  if (key.includes('task manager') || key.includes('taskmgr')) {
+    spawn('taskmgr.exe', [], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  }
+  if (key.includes('cmd') || key.includes('command prompt') || key.includes('terminal')) {
+    spawn('cmd.exe', ['/c', 'start', 'cmd.exe'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    return true;
+  }
+  if (key.includes('paint')) {
+    spawn('mspaint.exe', [], { detached: true, stdio: 'ignore' }).unref();
+    return true;
+  }
+  if (key.includes('vscode') || key.includes('visual studio code')) {
+    spawn('cmd.exe', ['/c', 'code'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    return true;
+  }
+  if (key.includes('spotify')) {
+    openExternalSafe('spotify:');
+    return true;
+  }
+
+  // Check saved shortcuts in Dynamic Island config
+  const folders = config.get()?.folders || [];
+  for (const f of folders) {
+    const fn = String(f.name || '').toLowerCase();
+    if (fn && (fn === key || fn.includes(key) || key.includes(fn))) {
+      openFolder(f.path);
+      return true;
+    }
+  }
+
+  // Check Windows Start Menu shortcuts (.lnk)
+  const lnk = findStartMenuShortcut(key);
+  if (lnk) {
+    shell.openPath(lnk);
+    return true;
+  }
+  return false;
 }
 
 function openFolder(p) {
@@ -434,6 +601,69 @@ function registerIpc() {
       return { ok: true, audioDataUrl: `data:audio/mpeg;base64,${buf.toString('base64')}` };
     } catch {
       return { ok: false };
+    }
+  });
+
+  // Jarvis Deep Actions: Open Browser/URLs, Launch App, Play Specific Spotify Song, & AI Action Planner
+  ipcMain.handle('jarvis:open-browser', (_e, { urls = [], preferChrome = false } = {}) => {
+    openBrowserUrls(urls, preferChrome);
+    return { ok: true };
+  });
+
+  ipcMain.handle('jarvis:open-app', (_e, appName) => {
+    const ok = launchSystemOrUserApp(appName);
+    return { ok };
+  });
+
+  ipcMain.handle('jarvis:play-spotify', async (_e, query) => resolveAndPlaySpotify(query));
+
+  ipcMain.handle('jarvis:interpret', async (_e, text) => {
+    try {
+      const sysPrompt = [
+        'Kamu adalah otak perencana aksi JARVIS untuk desktop Windows.',
+        'Tugasmu: ubah perintah suara user menjadi JSON murni (TANPA ```json atau teks lain di luar JSON).',
+        'Format JSON:',
+        '{"actions":[...],"reply":"Kalimat balasan singkat dan ramah ala Jarvis dalam Bahasa Indonesia"}',
+        'Jenis object di dalam array "actions" yang didukung:',
+        '1. {"type":"open_browser","preferChrome":true,"urls":["https://..."]} -> jika user minta buka Chrome / browser dan/atau membuka situs web (misal Web WhatsApp = https://web.whatsapp.com, YouTube = https://www.youtube.com, Google = https://www.google.com, Instagram = https://www.instagram.com, GitHub = https://github.com, ChatGPT = https://chatgpt.com, Gmail = https://mail.google.com, Drive = https://drive.google.com, dll). Jika user bilang "buka google chrome dan buka web whatsapp", gabungkan jadi 1 aksi {"type":"open_browser","preferChrome":true,"urls":["https://web.whatsapp.com"]}.',
+        '2. {"type":"play_spotify","query":"judul lagu dan/atau artis"} -> jika user minta buka Spotify dan putar lagu tertentu, atau minta putar lagu dengan judul tertentu.',
+        '3. {"type":"media","cmd":"play|pause|next|prev|open-spotify"} -> kontrol musik umum tanpa judul lagu spesifik.',
+        '4. {"type":"open_app","app":"nama aplikasi"} -> misal calculator, notepad, explorer, settings, cmd, vscode, discord, roblox, dll.',
+        '5. {"type":"google_search","query":"kata kunci"} -> jika user minta cari sesuatu di Google.',
+        '6. {"type":"youtube_search","query":"kata kunci"} -> jika user minta cari video/lagu di YouTube.',
+        '7. {"type":"timer","seconds":300} -> pasang timer dalam detik.',
+        '8. {"type":"stopwatch","cmd":"start|reset"} -> mulai atau reset stopwatch.',
+        '9. {"type":"alarm","time":"07:00","label":"Alarm"} -> pasang alarm format HH:MM.',
+        '10. {"type":"volume","level":80} atau {"type":"mute","cmd":"toggle"}.',
+        '11. {"type":"tab","tab":"home|media|clock|stash|gemini"} atau {"type":"pin","value":true}.',
+        'Jika user hanya bertanya pengetahuan umum / mengobrol tanpa perintah aksi PC, kosongkan array "actions": [] dan isi "reply" dengan jawaban lengkapmu.',
+      ].join('\n');
+
+      const res = await fetch('https://text.pollinations.ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openai',
+          messages: [
+            { role: 'system', content: sysPrompt },
+            { role: 'user', content: String(text || '') },
+          ],
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const raw = (await res.text()).trim();
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          ok: true,
+          actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+          reply: String(parsed.reply || 'Siap bos, sudah dijalankan.'),
+        };
+      }
+      return { ok: true, actions: [], reply: raw };
+    } catch (err) {
+      return { ok: false, error: err.message };
     }
   });
 

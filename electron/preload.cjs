@@ -35,6 +35,10 @@ contextBridge.exposeInMainWorld('island', {
   jarvis: {
     transcribe: (pcmBase64, lang) => ipcRenderer.invoke('jarvis:transcribe', pcmBase64, lang),
     tts: (text) => ipcRenderer.invoke('jarvis:tts', text),
+    openBrowser: (opts) => ipcRenderer.invoke('jarvis:open-browser', opts),
+    openApp: (appName) => ipcRenderer.invoke('jarvis:open-app', appName),
+    playSpotify: (query) => ipcRenderer.invoke('jarvis:play-spotify', query),
+    interpret: (text) => ipcRenderer.invoke('jarvis:interpret', text),
   },
 
   config: {
