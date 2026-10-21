@@ -59,8 +59,8 @@ function isStartupEnabled() {
   return fs.existsSync(STARTUP_LNK);
 }
 
-// Window canvas = max expanded island size (680x340) + room for the shadow
-const WIN_W = 720;
+// Window canvas = max expanded island size (740x340) + room for the shadow
+const WIN_W = 780;
 const WIN_H = 410;
 // Default hit region = tiny top lip so browser tabs underneath are never blocked
 const LIP_SHAPE = [{ x: Math.round((WIN_W - 140) / 2), y: 0, width: 140, height: 8 }];
@@ -626,10 +626,10 @@ app.whenReady().then(async () => {
     const lipW = config.get()?.edgeZoneWidth || 160;
     const cx = b.x + b.width / 2;
     const inTopLip = pt.y >= b.y && pt.y <= b.y + 12 && Math.abs(pt.x - cx) <= lipW / 2;
-    const inIsland = pt.y >= b.y && pt.y <= b.y + 358 && Math.abs(pt.x - cx) <= 348;
+    const inIsland = pt.y >= b.y && pt.y <= b.y + 358 && Math.abs(pt.x - cx) <= 378;
 
     if (islandExpanded) {
-      // While expanded, keep window interactive whenever cursor is inside the 680x340 island
+      // While expanded, keep window interactive whenever cursor is inside the 740x340 island
       setIgnoreMouse(!inIsland);
     } else {
       // While hidden/peeking, only the top lip is interactive

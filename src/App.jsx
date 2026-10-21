@@ -17,7 +17,7 @@ const SPRING = {
   mass: 0.72,
   restDelta: 0.5,
 };
-const EXPANDED = { width: 680, height: 340, borderRadius: 38, y: 8 };
+const EXPANDED = { width: 740, height: 340, borderRadius: 38, y: 8 };
 
 export default function App() {
   const config = useConfig();
