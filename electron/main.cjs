@@ -246,7 +246,7 @@ function openBrowserUrls(urls = [], preferChrome = false) {
   const validUrls = urls.filter(Boolean);
   const chromeExe = preferChrome ? findChromeExe() : null;
   if (chromeExe) {
-    const args = validUrls.length ? validUrls : ['https://www.google.com'];
+    const args = ['--force-renderer-accessibility', ...(validUrls.length ? validUrls : ['https://www.google.com'])];
     spawn(chromeExe, args, { detached: true, stdio: 'ignore' }).unref();
     return;
   }
@@ -255,6 +255,34 @@ function openBrowserUrls(urls = [], preferChrome = false) {
   } else {
     for (const u of validUrls) openExternalSafe(u);
   }
+}
+
+function runWhatsAppAutomation({ action = 'open', contact = '', message = '' } = {}) {
+  return new Promise((resolve) => {
+    const scriptPath = path.join(RES_DIR, 'whatsapp.ps1');
+    execFile(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-WindowStyle', 'Hidden',
+        '-File', scriptPath,
+        '-Action', String(action || 'open'),
+        '-Contact', String(contact || ''),
+        '-Message', String(message || ''),
+      ],
+      { timeout: 32000, windowsHide: true },
+      (_err, stdout) => {
+        try {
+          const lines = String(stdout || '').trim().split('\n').filter(Boolean);
+          const last = lines[lines.length - 1] || '{}';
+          resolve(JSON.parse(last));
+        } catch {
+          resolve({ ok: true, action });
+        }
+      },
+    );
+  });
 }
 
 function curlGet(url) {
@@ -620,6 +648,8 @@ function registerIpc() {
 
   ipcMain.handle('jarvis:play-spotify', async (_e, query) => resolveAndPlaySpotify(query));
 
+  ipcMain.handle('jarvis:whatsapp', async (_e, payload = {}) => runWhatsAppAutomation(payload));
+
   let pendingPowerTimer = null;
   ipcMain.handle('jarvis:power', (_e, { cmd = '', delaySec = 0 } = {}) => {
     const action = String(cmd || '').toLowerCase().trim();
@@ -703,6 +733,7 @@ function registerIpc() {
         '10. {"type":"volume","level":80} atau {"type":"mute","cmd":"toggle"}.',
         '11. {"type":"tab","tab":"home|media|clock|stash|gemini"} atau {"type":"pin","value":true}.',
         '12. {"type":"power","cmd":"shutdown|restart|sleep|lock|cancel","delaySec":8} -> kontrol daya laptop: shutdown/matikan laptop (cmd:"shutdown"), restart/mulai ulang laptop (cmd:"restart"), sleep/tidurkan laptop (cmd:"sleep"), kunci layar (cmd:"lock"), atau batalkan shutdown/restart (cmd:"cancel").',
+        '13. {"type":"whatsapp","action":"send|call|videocall|open","contact":"nama kontak","message":"isi pesan"} -> jika user minta kirim pesan WhatsApp ke seseorang (action:"send", contact:"kenzie", message:"nanti jam 5 nge gym yuk") atau menelfon seseorang di WhatsApp (action:"call" atau "videocall", contact:"bagas").',
         'Jika user hanya bertanya pengetahuan umum / mengobrol tanpa perintah aksi PC, kosongkan array "actions": [] dan isi "reply" dengan jawaban lengkapmu.',
       ].join('\n');
 

@@ -31,6 +31,7 @@
         "filter": [
           "media.ps1",
           "sysinfo.ps1",
+          "whatsapp.ps1",
           "icon.png",
           "icon.ico"
         ]

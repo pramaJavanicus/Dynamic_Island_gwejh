@@ -239,6 +239,81 @@ function extractSongQuery(lower) {
   return null;
 }
 
+function extractWhatsAppCommand(lower) {
+  // Strip optional leading "buka google chrome dan buka whatsapp web dan tolong..."
+  const stripped = lower
+    .replace(/^(?:(?:buka|bukain|open|jalankan)\s+(?:google\s+chrome|chrome)\s+(?:dan|lalu|terus|kemudian)\s+(?:tolong\s+)?)?/i, '')
+    .replace(/^(?:(?:buka|bukain|open|jalankan)\s+(?:web\s+whatsapp|whatsapp\s+web|wa\s+web|whatsapp|wa)\s+(?:dan|lalu|terus|kemudian)\s+(?:tolong\s+)?)?/i, '')
+    .trim();
+
+  // 1. Video Call (e.g. "buka whatsapp web dan video call bagas", "vc bagas di wa")
+  const vcMatch = stripped.match(/^(?:video\s*call|vc|panggilan\s+video)\s+(?:sama\s+|ke\s+|dengan\s+)?([a-zA-Z0-9_.\s]{1,35}?)(?:\s+(?:di|lewat|via|pakai|on)\s+(?:web\s+whatsapp|whatsapp\s+web|wa\s+web|whatsapp|wa))?(?:\s+sekarang|\s+dong|\s+ya)?$/i);
+  if (vcMatch && vcMatch[1]) {
+    return {
+      action: 'videocall',
+      contact: vcMatch[1].trim(),
+      message: '',
+    };
+  }
+
+  // 2. Voice Call (e.g. "buka whatsapp web dan telfon bagas", "telepon bagas di wa", "telfon bagas")
+  const callMatch = stripped.match(/^(?:telfon|telpon|telepon|nelpon|nelfon|call|panggilan\s+suara)\s+(?:sama\s+|ke\s+|dengan\s+)?([a-zA-Z0-9_.\s]{1,35}?)(?:\s+(?:di|lewat|via|pakai|on)\s+(?:web\s+whatsapp|whatsapp\s+web|wa\s+web|whatsapp|wa))?(?:\s+sekarang|\s+dong|\s+ya)?$/i);
+  if (callMatch && callMatch[1]) {
+    return {
+      action: 'call',
+      contact: callMatch[1].trim(),
+      message: '',
+    };
+  }
+
+  // 3. Chat <contact> dan kirimkan pesan <message>
+  // e.g. "chat kenzie dan kirimkan pesan nanti jam 5 nge gym yuk"
+  const chatSendMatch = stripped.match(/^(?:chat|chating|hubungi|wa|whatsapp)\s+(?:ke\s+|sama\s+)?([a-zA-Z0-9_.\s]{1,30}?)(?:\s+(?:di|lewat|via|on)\s+(?:web\s+whatsapp|whatsapp\s+web|wa\s+web|whatsapp|wa))?\s+(?:(?:dan|lalu|terus|kemudian)\s+)?(?:tolong\s+)?(?:kirimkan\s+pesan|kirim\s+pesan|kirimkan\s+chat|kirim\s+chat|kirimkan|kirim|bilang|katakan|ketik|ketikkan|pesan|isinya|dengan\s+pesan|say|send\s+message|send)\s*[:,]?\s*(.+)$/i);
+  if (chatSendMatch && chatSendMatch[1] && chatSendMatch[2]) {
+    return {
+      action: 'send',
+      contact: chatSendMatch[1].trim(),
+      message: chatSendMatch[2].trim(),
+    };
+  }
+
+  // 4. Kirim pesan / kirim WA ke <contact> <message>
+  // e.g. "kirim pesan ke kenzie nanti jam 5 nge gym yuk"
+  const sendToMatch = stripped.match(/^(?:kirimkan\s+pesan|kirim\s+pesan|kirimkan\s+chat|kirim\s+chat|kirim\s+wa|kirim\s+whatsapp|send\s+a?\s*message|send\s+whatsapp)\s+(?:ke|kepada|untuk|sama|to)\s+([a-zA-Z0-9_.\s]{1,30}?)(?:\s+(?:di|lewat|via|on)\s+(?:web\s+whatsapp|whatsapp\s+web|wa\s+web|whatsapp|wa))?\s+(?:(?:dan\s+|lalu\s+)?(?:kirimkan\s+pesan|kirim\s+pesan|bilang|katakan|isinya|pesan|bahwa|ketik|that|saying)\s*[:,]?\s*)?(.+)$/i);
+  if (sendToMatch && sendToMatch[1] && sendToMatch[2]) {
+    return {
+      action: 'send',
+      contact: sendToMatch[1].trim(),
+      message: sendToMatch[2].trim(),
+    };
+  }
+
+  // 5. Short form: "chat <singleName> <message>" or "wa <singleName> <message>"
+  const shortChatMatch = stripped.match(/^(?:chat|wa|whatsapp)\s+([a-zA-Z0-9_.]{2,22})(?:\s+(?:di|lewat|via)\s+(?:web\s+whatsapp|whatsapp\s+web|wa\s+web|whatsapp|wa))?\s+(.+)$/i);
+  if (shortChatMatch && shortChatMatch[1] && shortChatMatch[2]) {
+    const contactCandidate = shortChatMatch[1].trim();
+    if (!['web', 'di', 'ke', 'dan'].includes(contactCandidate.toLowerCase())) {
+      return {
+        action: 'send',
+        contact: contactCandidate,
+        message: shortChatMatch[2].trim(),
+      };
+    }
+  }
+
+  // 6. Open specific contact chat without sending a message (e.g. "buka chat bagas di wa")
+  const openChatMatch = stripped.match(/^(?:buka\s+chat|cari\s+kontak|cari\s+chat)\s+([a-zA-Z0-9_.\s]{1,30}?)(?:\s+(?:di|lewat|via)\s+(?:web\s+whatsapp|whatsapp\s+web|wa\s+web|whatsapp|wa))?$/i);
+  if (openChatMatch && openChatMatch[1]) {
+    return {
+      action: 'open_chat',
+      contact: openChatMatch[1].trim(),
+      message: '',
+    };
+  }
+
+  return null;
+}
+
 export function useJarvis({
   setTab,
   setPinned,
@@ -407,6 +482,14 @@ export function useJarvis({
         }
         case 'power': {
           await api.jarvis.power({ cmd: act.cmd || 'sleep', delaySec: act.delaySec });
+          break;
+        }
+        case 'whatsapp': {
+          api.jarvis.whatsapp({
+            action: act.action || 'send',
+            contact: act.contact || '',
+            message: act.message || '',
+          });
           break;
         }
         default:
@@ -657,6 +740,29 @@ export function useJarvis({
       openIslandTab('media');
       api.media.command('open-spotify');
       return finishWithAction('Right away, sir. Opening Spotify.');
+    }
+
+    // =========================================================================
+    // 2G. WHATSAPP WEB AUTOMATION (Send Chat Message, Call, Video Call, Open Chat)
+    // =========================================================================
+    const waCmd = extractWhatsAppCommand(lower);
+    if (waCmd) {
+      api.jarvis.whatsapp({
+        action: waCmd.action,
+        contact: waCmd.contact,
+        message: waCmd.message,
+      });
+
+      if (waCmd.action === 'send') {
+        return finishWithAction(`Right away, sir. Sending your WhatsApp message to ${waCmd.contact}.`);
+      }
+      if (waCmd.action === 'videocall') {
+        return finishWithAction(`Right away, sir. Opening WhatsApp Web and starting a video call with ${waCmd.contact}.`);
+      }
+      if (waCmd.action === 'call') {
+        return finishWithAction(`Right away, sir. Opening WhatsApp Web and calling ${waCmd.contact}.`);
+      }
+      return finishWithAction(`Right away, sir. Opening ${waCmd.contact}'s chat on WhatsApp Web.`);
     }
 
     // =========================================================================
