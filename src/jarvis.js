@@ -405,6 +405,10 @@ export function useJarvis({
           setPinned(act.value !== false);
           break;
         }
+        case 'power': {
+          await api.jarvis.power({ cmd: act.cmd || 'sleep', delaySec: act.delaySec });
+          break;
+        }
         default:
           break;
       }
@@ -431,6 +435,54 @@ export function useJarvis({
       await speak(replyText);
       return { handled: true, reply: replyText };
     };
+
+    // =========================================================================
+    // 0. SYSTEM POWER COMMANDS (Shutdown, Restart, Sleep Mode, Lock Screen, Cancel)
+    // =========================================================================
+
+    // Cancel / Abort Shutdown or Restart (e.g. "batalkan shutdown", "cancel shutdown", "batalkan restart")
+    if (
+      /\b(batalkan|batal|cancel|abort|hentikan|stop)\b.*\b(shutdown|shut down|restart|reboot|sleep|mati|mematikan)\b/i.test(lower)
+    ) {
+      await api.jarvis.power({ cmd: 'cancel' });
+      return finishWithAction('System power sequence has been aborted, sir.');
+    }
+
+    // Sleep Mode (e.g. "sleep mode", "mode tidur", "tidurkan laptop", "sleep laptop", "standby laptop")
+    if (
+      /\b(sleep\s*mode|mode\s*sleep|mode\s*tidur|tidurkan\s*(laptop|komputer|pc)?|sleep\s*(laptop|komputer|pc|sekarang)?|put\s*(the\s*)?(laptop|computer|pc|system)\s*to\s*sleep|standby\s*(laptop|mode)?)\b/i.test(lower)
+      || /^(sleep|tidur)$/i.test(lower)
+    ) {
+      const customDelay = parseDurationSeconds(lower) || 3;
+      await api.jarvis.power({ cmd: 'sleep', delaySec: customDelay });
+      return finishWithAction('Right away, sir. Putting your laptop into sleep mode now.');
+    }
+
+    // Lock Screen (e.g. "kunci layar", "kunci laptop", "lock screen", "lock laptop")
+    if (/\b(kunci\s*(layar|laptop|komputer|pc)|lock\s*(screen|laptop|computer|pc|workstation))\b/i.test(lower)) {
+      await api.jarvis.power({ cmd: 'lock', delaySec: 2 });
+      return finishWithAction('Locking your screen now, sir.');
+    }
+
+    // Restart / Reboot Laptop (e.g. "restart laptop", "reboot laptop", "mulai ulang laptop", "restart komputer")
+    if (
+      /\b(restart|reboot|mulai\s*ulang)\b.*\b(laptop|komputer|pc|sistem|system|sekarang|now)?\b/i.test(lower)
+      && !/\b(timer|stopwatch|aplikasi|app|spotify|browser|chrome)\b/i.test(lower)
+    ) {
+      const delaySec = parseDurationSeconds(lower) || 8;
+      await api.jarvis.power({ cmd: 'restart', delaySec });
+      return finishWithAction(`Right away, sir. Restarting your laptop in ${delaySec} seconds. Say cancel restart if you wish to abort.`);
+    }
+
+    // Shutdown / Turn Off Laptop (e.g. "shutdown laptop", "matikan laptop", "matikan komputer", "turn off laptop")
+    if (
+      /\b(shutdown|shut\s*down|power\s*off|turn\s*off)\b/i.test(lower)
+      || /\b(matikan)\s+(laptop|komputer|pc|sistem|system)\b/i.test(lower)
+    ) {
+      const delaySec = parseDurationSeconds(lower) || 8;
+      await api.jarvis.power({ cmd: 'shutdown', delaySec });
+      return finishWithAction(`Right away, sir. Initiating system shutdown in ${delaySec} seconds. Say cancel shutdown if you wish to abort.`);
+    }
 
     // =========================================================================
     // 1. TIMER, STOPWATCH & ALARM (Checked early so "stop/pause timer/stopwatch/alarm" is never confused with music)

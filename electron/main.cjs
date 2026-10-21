@@ -619,6 +619,69 @@ function registerIpc() {
 
   ipcMain.handle('jarvis:play-spotify', async (_e, query) => resolveAndPlaySpotify(query));
 
+  let pendingPowerTimer = null;
+  ipcMain.handle('jarvis:power', (_e, { cmd = '', delaySec = 0 } = {}) => {
+    const action = String(cmd || '').toLowerCase().trim();
+    if (pendingPowerTimer) {
+      clearTimeout(pendingPowerTimer);
+      pendingPowerTimer = null;
+    }
+
+    if (action === 'cancel' || action === 'abort') {
+      spawn('shutdown.exe', ['/a'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+      return { ok: true, cmd: 'cancel' };
+    }
+
+    if (action === 'lock') {
+      const waitMs = Math.max(1500, (Number(delaySec) || 2) * 1000);
+      pendingPowerTimer = setTimeout(() => {
+        pendingPowerTimer = null;
+        spawn('rundll32.exe', ['user32.dll,LockWorkStation'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+      }, waitMs);
+      return { ok: true, cmd: 'lock' };
+    }
+
+    if (action === 'sleep') {
+      const waitMs = Math.max(2500, (Number(delaySec) || 3) * 1000);
+      pendingPowerTimer = setTimeout(() => {
+        pendingPowerTimer = null;
+        spawn(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-WindowStyle', 'Hidden',
+            '-Command',
+            'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)',
+          ],
+          { detached: true, stdio: 'ignore', windowsHide: true },
+        ).unref();
+      }, waitMs);
+      return { ok: true, cmd: 'sleep' };
+    }
+
+    if (action === 'shutdown') {
+      const sec = Math.max(5, Math.round(Number(delaySec) || 8));
+      spawn(
+        'shutdown.exe',
+        ['/s', '/t', String(sec), '/c', 'J.A.R.V.I.S.: System shutdown initiated.'],
+        { detached: true, stdio: 'ignore', windowsHide: true },
+      ).unref();
+      return { ok: true, cmd: 'shutdown', delaySec: sec };
+    }
+
+    if (action === 'restart' || action === 'reboot') {
+      const sec = Math.max(5, Math.round(Number(delaySec) || 8));
+      spawn(
+        'shutdown.exe',
+        ['/r', '/t', String(sec), '/c', 'J.A.R.V.I.S.: System restart initiated.'],
+        { detached: true, stdio: 'ignore', windowsHide: true },
+      ).unref();
+      return { ok: true, cmd: 'restart', delaySec: sec };
+    }
+
+    return { ok: false, error: 'Unknown power command' };
+  });
+
   ipcMain.handle('jarvis:interpret', async (_e, text) => {
     try {
       const sysPrompt = [
@@ -638,6 +701,7 @@ function registerIpc() {
         '9. {"type":"alarm","cmd":"add|remove|clear","time":"07:00","label":"Alarm"} -> pasang alarm format 24 jam HH:MM (cmd:"add"), hapus alarm jam tertentu (cmd:"remove"), atau hapus semua alarm (cmd:"clear").',
         '10. {"type":"volume","level":80} atau {"type":"mute","cmd":"toggle"}.',
         '11. {"type":"tab","tab":"home|media|clock|stash|gemini"} atau {"type":"pin","value":true}.',
+        '12. {"type":"power","cmd":"shutdown|restart|sleep|lock|cancel","delaySec":8} -> kontrol daya laptop: shutdown/matikan laptop (cmd:"shutdown"), restart/mulai ulang laptop (cmd:"restart"), sleep/tidurkan laptop (cmd:"sleep"), kunci layar (cmd:"lock"), atau batalkan shutdown/restart (cmd:"cancel").',
         'Jika user hanya bertanya pengetahuan umum / mengobrol tanpa perintah aksi PC, kosongkan array "actions": [] dan isi "reply" dengan jawaban lengkapmu.',
       ].join('\n');
 

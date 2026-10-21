@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('island', {
     openBrowser: (opts) => ipcRenderer.invoke('jarvis:open-browser', opts),
     openApp: (appName) => ipcRenderer.invoke('jarvis:open-app', appName),
     playSpotify: (query) => ipcRenderer.invoke('jarvis:play-spotify', query),
+    power: (opts) => ipcRenderer.invoke('jarvis:power', opts),
     interpret: (text) => ipcRenderer.invoke('jarvis:interpret', text),
   },
 
