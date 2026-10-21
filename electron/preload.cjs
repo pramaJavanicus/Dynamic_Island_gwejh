@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('island', {
     openApp: (appName) => ipcRenderer.invoke('jarvis:open-app', appName),
     playSpotify: (query) => ipcRenderer.invoke('jarvis:play-spotify', query),
     whatsapp: (opts) => ipcRenderer.invoke('jarvis:whatsapp', opts),
+    vscode: (opts) => ipcRenderer.invoke('jarvis:vscode', opts),
     power: (opts) => ipcRenderer.invoke('jarvis:power', opts),
     interpret: (text) => ipcRenderer.invoke('jarvis:interpret', text),
   },

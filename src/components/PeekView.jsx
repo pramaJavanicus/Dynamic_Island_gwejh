@@ -32,6 +32,43 @@ export function HiddenLipView({ mediaPlaying, timerRunning, stashCount }) {
   );
 }
 
+export function BluetoothToastView({ device }) {
+  if (!device) return null;
+  const hasBatt = device.battery != null && device.battery >= 0;
+  return (
+    <div className="flex h-full w-full items-center justify-between gap-3 px-4">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-500/25 text-indigo-300 ring-1 ring-indigo-400/40">
+          <Headphones size={17} className="text-indigo-300" />
+          <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-400 text-black ring-2 ring-black">
+            <Bluetooth size={9} strokeWidth={3} />
+          </span>
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Bluetooth Terhubung
+          </div>
+          <div className="truncate font-display text-[13.5px] font-bold text-white">
+            {device.name}
+          </div>
+        </div>
+      </div>
+
+      {hasBatt ? (
+        <div className="flex shrink-0 items-center gap-1 rounded-full bg-indigo-500/20 px-2.5 py-1 text-[11.5px] font-bold tabular-nums text-indigo-200 ring-1 ring-indigo-400/30">
+          <Battery size={13} className="text-emerald-400" />
+          {device.battery}%
+        </div>
+      ) : (
+        <div className="shrink-0 rounded-full bg-emerald-400/15 px-2.5 py-1 text-[10.5px] font-semibold text-emerald-300 ring-1 ring-emerald-400/30">
+          Connected
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PeekView({ sysinfo, clock, media }) {
   const battery = useBattery();
   const temp = sysinfo?.temp;

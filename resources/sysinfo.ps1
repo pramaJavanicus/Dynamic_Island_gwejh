@@ -299,7 +299,7 @@ function Get-BluetoothBatteries {
         $conn = [BtCfg]::IsConnected($id)
         $batt = [BtCfg]::GetBattery($id)
 
-        if ($conn -and ($id -match '^BTH(ENUM|LE)\\Dev_' -or $id -like '*MMDEVAPI*')) {
+        if ($conn -and ($id -like 'BTH*' -or $id -like '*MMDEVAPI*')) {
             $entry.connected = $true
             if ($id -match '^BTH(ENUM|LE)\\Dev_' -and $n.Name) {
                 $entry.name = $n.Name.Trim()
@@ -338,13 +338,13 @@ function Update-HeavyStats {
     $cpu = Get-CpuMetrics
     $script:cachedCpu = $cpu.load
     $script:cachedTemp = Get-Temperature $cpu
+}
+
+function Get-FullPayload {
     try {
         $bt = Get-BluetoothBatteries
         $script:cachedBt = $bt.ToArray()
     } catch {}
-}
-
-function Get-FullPayload {
     $net = [SysAudioNet]::SampleNetSpeed()
     $vol = [SysAudioNet]::GetVolume()
     $muted = [SysAudioNet]::GetMute()

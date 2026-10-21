@@ -492,6 +492,13 @@ export function useJarvis({
           });
           break;
         }
+        case 'vscode': {
+          await api.jarvis.vscode({
+            action: act.action || 'open',
+            instruction: act.instruction || '',
+          });
+          break;
+        }
         default:
           break;
       }
@@ -743,7 +750,7 @@ export function useJarvis({
     }
 
     // =========================================================================
-    // 2G. WHATSAPP WEB AUTOMATION (Send Chat Message, Call, Video Call, Open Chat)
+    // 2G. WHATSAPP WEB STEALTH BACKGROUND AUTOMATION (Send Chat, Call, Video Call)
     // =========================================================================
     const waCmd = extractWhatsAppCommand(lower);
     if (waCmd) {
@@ -754,15 +761,56 @@ export function useJarvis({
       });
 
       if (waCmd.action === 'send') {
-        return finishWithAction(`Right away, sir. Sending your WhatsApp message to ${waCmd.contact}.`);
+        return finishWithAction(`Right away, sir. Sending your WhatsApp message to ${waCmd.contact} in the background.`);
       }
       if (waCmd.action === 'videocall') {
-        return finishWithAction(`Right away, sir. Opening WhatsApp Web and starting a video call with ${waCmd.contact}.`);
+        return finishWithAction(`Right away, sir. Starting a WhatsApp video call with ${waCmd.contact} in the background.`);
       }
       if (waCmd.action === 'call') {
-        return finishWithAction(`Right away, sir. Opening WhatsApp Web and calling ${waCmd.contact}.`);
+        return finishWithAction(`Right away, sir. Calling ${waCmd.contact} on WhatsApp in the background.`);
       }
-      return finishWithAction(`Right away, sir. Opening ${waCmd.contact}'s chat on WhatsApp Web.`);
+      return finishWithAction(`Right away, sir. Opening ${waCmd.contact}'s chat on WhatsApp.`);
+    }
+
+    // =========================================================================
+    // 2H. VISUAL STUDIO CODE INTEGRATION (Open, Auto-Fix Broken Code, Format, Terminal)
+    // =========================================================================
+
+    // Fix broken code directly inside the active VS Code editor
+    if (
+      /\b(perbaiki|benerin|betulkan|benarkan|fix|debug|solve|koreksi)\b.*\b(kode|code|kodingan|codingan|program|script|error|bug|salah)\b/i.test(lower)
+      || /\b(kode|code|kodingan|codingan|program|script)\b.*\b(salah|error|bug|rusak|perbaiki|benerin|betulkan|fix)\b/i.test(lower)
+    ) {
+      speak('Analyzing and fixing your code in Visual Studio Code now, sir.');
+      const res = await api.jarvis.vscode({ action: 'fix', instruction: clean });
+      return finishWithAction(
+        res?.reply || 'Done, sir. I have fixed your code in Visual Studio Code.',
+      );
+    }
+
+    // Format / Tidy Code in VS Code
+    if (
+      /\b(rapikan|format|rapiin|beautify)\b.*\b(kode|code|kodingan|codingan|dokumen|file)\b/i.test(lower)
+    ) {
+      await api.jarvis.vscode({ action: 'format' });
+      return finishWithAction('Formatting your code in Visual Studio Code, sir.');
+    }
+
+    // Open Integrated Terminal in VS Code
+    if (
+      /\b(terminal)\b.*\b(vscode|vs\s*code|visual\s*studio\s*code|kodingan)\b/i.test(lower)
+    ) {
+      await api.jarvis.vscode({ action: 'terminal' });
+      return finishWithAction('Toggling the terminal in Visual Studio Code, sir.');
+    }
+
+    // Open Visual Studio Code
+    if (
+      /\b(buka|bukain|open|jalankan|fokus|focus|masuk)\b.*\b(vscode|vs\s*code|v\s*s\s*code|visual\s*studio\s*code|visual\s*code|vs\s*kot|aplikasi\s*coding|aplikasi\s*ngoding)\b/i.test(lower)
+      || /^(vscode|vs code|visual studio code)$/i.test(lower)
+    ) {
+      await api.jarvis.vscode({ action: 'open' });
+      return finishWithAction('Right away, sir. Visual Studio Code is now open.');
     }
 
     // =========================================================================

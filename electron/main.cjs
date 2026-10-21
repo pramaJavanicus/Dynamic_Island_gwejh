@@ -285,6 +285,123 @@ function runWhatsAppAutomation({ action = 'open', contact = '', message = '' } =
   });
 }
 
+function findVsCodeExe() {
+  const candidates = [
+    path.join(process.env.LOCALAPPDATA || '', 'Programs\\Microsoft VS Code\\Code.exe'),
+    path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Microsoft VS Code\\Code.exe'),
+    path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Microsoft VS Code\\Code.exe'),
+  ];
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+function execVsCodePs1(args = []) {
+  return new Promise((resolve) => {
+    const scriptPath = path.join(RES_DIR, 'vscode.ps1');
+    execFile(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-WindowStyle', 'Hidden',
+        '-File', scriptPath,
+        ...args,
+      ],
+      { timeout: 15000, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
+      (_err, stdout) => {
+        try {
+          const lines = String(stdout || '').trim().split('\n').filter(Boolean);
+          const last = lines[lines.length - 1] || '{}';
+          resolve(JSON.parse(last));
+        } catch {
+          resolve({ ok: false });
+        }
+      },
+    );
+  });
+}
+
+async function runVsCodeAutomation({ action = 'open', instruction = '' } = {}) {
+  const act = String(action || 'open').toLowerCase().trim();
+  if (act === 'open' || act === 'format' || act === 'terminal') {
+    const res = await execVsCodePs1(['-Action', act]);
+    return { ok: true, ...res };
+  }
+
+  if (act === 'fix') {
+    // 1. Read the current code from the active VS Code editor
+    const readRes = await execVsCodePs1(['-Action', 'read']);
+    if (!readRes?.ok || !readRes.code) {
+      return {
+        ok: false,
+        reply: 'Please make sure Visual Studio Code is open with the code file you want me to fix, sir.',
+      };
+    }
+
+    // 2. Ask AI to fix the broken code and return pure corrected source code
+    const fileHint = String(readRes.title || '').replace(/\s*-\s*Visual Studio Code.*$/i, '').trim();
+    const sysPrompt = [
+      'You are J.A.R.V.I.S., an expert senior software engineer integrated into Visual Studio Code.',
+      'Your task: Fix all syntax errors, bugs, typos, missing brackets/semicolons/imports, and logic errors in the user\'s code, or apply the user\'s requested modification.',
+      'IMPORTANT RULES:',
+      '1. Return ONLY the complete, corrected source code ready to be saved directly into the file.',
+      '2. Do NOT wrap the output in ``` markdown fences or add conversational text before/after the code.',
+      '3. Preserve the programming language, indentation style, and intended functionality.',
+    ].join('\n');
+
+    const userPrompt = [
+      fileHint ? `File / Window: ${fileHint}` : '',
+      instruction ? `User request: ${instruction}` : 'Fix all errors and bugs in this code.',
+      '--- CODE START ---',
+      readRes.code,
+      '--- CODE END ---',
+    ].filter(Boolean).join('\n');
+
+    const res = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai',
+        messages: [
+          { role: 'system', content: sysPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      return { ok: false, reply: 'Apologies, sir. I could not reach the code analysis server.' };
+    }
+
+    let fixedCode = (await res.text()).trim();
+    // Strip markdown code block fences if the model included them
+    const fenceMatch = fixedCode.match(/^```[a-zA-Z0-9_-]*\r?\n([\s\S]*?)\r?\n```$/);
+    if (fenceMatch && fenceMatch[1]) {
+      fixedCode = fenceMatch[1];
+    } else {
+      fixedCode = fixedCode.replace(/^```[a-zA-Z0-9_-]*\r?\n/, '').replace(/\r?\n```$/, '');
+    }
+
+    if (!fixedCode.trim()) {
+      return { ok: false, reply: 'I could not generate a valid fix for the current file, sir.' };
+    }
+
+    // 3. Write the fixed code back into the active VS Code editor and save
+    const tmpFile = path.join(app.getPath('temp'), `jarvis_vscode_fix_${Date.now()}.txt`);
+    fs.writeFileSync(tmpFile, fixedCode, 'utf8');
+    await execVsCodePs1(['-Action', 'write', '-CodeFile', tmpFile]);
+    try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+
+    return {
+      ok: true,
+      reply: 'Done, sir. I have fixed and saved your code directly in Visual Studio Code.',
+    };
+  }
+
+  return { ok: false };
+}
+
 function curlGet(url) {
   return new Promise((resolve) => {
     execFile(
@@ -397,8 +514,19 @@ function launchSystemOrUserApp(appName) {
     spawn('mspaint.exe', [], { detached: true, stdio: 'ignore' }).unref();
     return true;
   }
-  if (key.includes('vscode') || key.includes('visual studio code')) {
-    spawn('cmd.exe', ['/c', 'code'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  if (
+    key.includes('vscode')
+    || key.includes('vs code')
+    || key.includes('v s code')
+    || key.includes('visual studio code')
+    || key.includes('visual code')
+  ) {
+    const codeExe = findVsCodeExe();
+    if (codeExe) {
+      spawn(codeExe, [], { detached: true, stdio: 'ignore' }).unref();
+    } else {
+      spawn('cmd.exe', ['/c', 'code'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    }
     return true;
   }
   if (key.includes('spotify')) {
@@ -650,6 +778,8 @@ function registerIpc() {
 
   ipcMain.handle('jarvis:whatsapp', async (_e, payload = {}) => runWhatsAppAutomation(payload));
 
+  ipcMain.handle('jarvis:vscode', async (_e, payload = {}) => runVsCodeAutomation(payload));
+
   let pendingPowerTimer = null;
   ipcMain.handle('jarvis:power', (_e, { cmd = '', delaySec = 0 } = {}) => {
     const action = String(cmd || '').toLowerCase().trim();
@@ -734,6 +864,7 @@ function registerIpc() {
         '11. {"type":"tab","tab":"home|media|clock|stash|gemini"} atau {"type":"pin","value":true}.',
         '12. {"type":"power","cmd":"shutdown|restart|sleep|lock|cancel","delaySec":8} -> kontrol daya laptop: shutdown/matikan laptop (cmd:"shutdown"), restart/mulai ulang laptop (cmd:"restart"), sleep/tidurkan laptop (cmd:"sleep"), kunci layar (cmd:"lock"), atau batalkan shutdown/restart (cmd:"cancel").',
         '13. {"type":"whatsapp","action":"send|call|videocall|open","contact":"nama kontak","message":"isi pesan"} -> jika user minta kirim pesan WhatsApp ke seseorang (action:"send", contact:"kenzie", message:"nanti jam 5 nge gym yuk") atau menelfon seseorang di WhatsApp (action:"call" atau "videocall", contact:"bagas").',
+        '14. {"type":"vscode","action":"open|fix|format|terminal","instruction":"instruksi perbaikan"} -> jika user minta buka VS Code (action:"open"), memperbaiki/benerin kode yang salah/error di VS Code (action:"fix"), merapikan/format kode di VS Code (action:"format"), atau buka terminal VS Code (action:"terminal").',
         'Jika user hanya bertanya pengetahuan umum / mengobrol tanpa perintah aksi PC, kosongkan array "actions": [] dan isi "reply" dengan jawaban lengkapmu.',
       ].join('\n');
 

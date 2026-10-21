@@ -2,12 +2,35 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import CompactView from './components/CompactView.jsx';
 import ExpandedView from './components/ExpandedView.jsx';
-import PeekView, { HiddenLipView } from './components/PeekView.jsx';
+import PeekView, { BluetoothToastView, HiddenLipView } from './components/PeekView.jsx';
 import { useClipboard, useConfig, useMedia, useStash, useSysInfo } from './hooks.js';
 import { useClockTools } from './clockStore.js';
 import { useJarvis } from './jarvis.js';
 
 const api = window.island;
+
+function playBtConnectChime() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const notes = [587.33, 880.0]; // D5 -> A5 (clean AirPods-like connect tone)
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.11);
+      gain.gain.setValueAtTime(0.001, ctx.currentTime + i * 0.11);
+      gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + i * 0.11 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.11 + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.11);
+      osc.stop(ctx.currentTime + i * 0.11 + 0.3);
+    });
+    setTimeout(() => ctx.close().catch(() => {}), 900);
+  } catch { /* ignore */ }
+}
 
 // Critically damped spring — zero jitter, 120fps fluid open & close
 const SPRING = {
@@ -91,6 +114,41 @@ export default function App() {
     jarvisBusyRef.current = jarvis.status !== 'idle';
   }, [jarvis.status]);
 
+  // --- Bluetooth Connection Auto-Popup Notification ---
+  const [btAlert, setBtAlert] = useState(null);
+  const knownBtRef = useRef(null);
+  const btTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (!sysinfo?.ts) return; // wait for first real sample from sysinfo.ps1
+    const currentList = Array.isArray(sysinfo.bluetooth) ? sysinfo.bluetooth : [];
+    const currentNames = new Set(currentList.map((d) => d.name).filter(Boolean));
+
+    if (knownBtRef.current === null) {
+      knownBtRef.current = currentNames;
+      return;
+    }
+
+    const newlyConnected = currentList.find((d) => d.name && !knownBtRef.current.has(d.name));
+    knownBtRef.current = currentNames;
+
+    if (newlyConnected) {
+      setBtAlert(newlyConnected);
+      playBtConnectChime();
+      if (modeRef.current !== 'expanded') {
+        clearTimeout(peekTimer.current);
+        setMode('bt-toast');
+      }
+      jarvis.speak(`Bluetooth connected to ${newlyConnected.name}, sir.`);
+
+      clearTimeout(btTimerRef.current);
+      btTimerRef.current = setTimeout(() => {
+        setBtAlert(null);
+        setMode((m) => (m === 'bt-toast' ? (activeClockRef.current ? 'peek' : 'hidden') : m));
+      }, 4500);
+    }
+  }, [sysinfo?.bluetooth, sysinfo?.ts, jarvis]);
+
   const activeClock = !!(clock?.timer?.running || clock?.stopwatch?.running);
   const activeClockRef = useRef(activeClock);
   useEffect(() => {
@@ -118,6 +176,8 @@ export default function App() {
     switch (mode) {
       case 'expanded':
         return EXPANDED;
+      case 'bt-toast':
+        return { width: 390, height: 56, borderRadius: 28, y: 8 };
       case 'compact':
         return { width: compactWidth, height: 36, borderRadius: 18, y: 6 };
       case 'peek':
@@ -303,6 +363,7 @@ export default function App() {
   };
 
   const isExpanded = mode === 'expanded';
+  const isBtToast = mode === 'bt-toast';
   const isCompact = mode === 'compact';
   const isPeek = mode === 'peek';
   const isHidden = mode === 'hidden';
@@ -388,6 +449,17 @@ export default function App() {
           style={{ pointerEvents: isCompact ? 'auto' : 'none', willChange: 'transform, opacity' }}
         >
           <CompactView media={media} clock={clock} sysinfo={sysinfo} stashCount={stashItems.length} />
+        </motion.div>
+
+        {/* Bluetooth Connected Toast layer */}
+        <motion.div
+          initial={false}
+          animate={{ opacity: isBtToast ? 1 : 0, scale: isBtToast ? 1 : 0.92 }}
+          transition={{ duration: 0.18 }}
+          className="absolute inset-0 transform-gpu"
+          style={{ pointerEvents: 'none', willChange: 'transform, opacity' }}
+        >
+          <BluetoothToastView device={btAlert} />
         </motion.div>
 
         {/* Status Peek view layer */}
