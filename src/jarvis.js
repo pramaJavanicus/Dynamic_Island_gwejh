@@ -750,7 +750,7 @@ export function useJarvis({
     }
 
     // =========================================================================
-    // 2G. WHATSAPP WEB STEALTH BACKGROUND AUTOMATION (Send Chat, Call, Video Call)
+    // 2G. WHATSAPP WEB AUTOMATION (Send Chat Message, Call, Video Call, Open Chat)
     // =========================================================================
     const waCmd = extractWhatsAppCommand(lower);
     if (waCmd) {
@@ -761,15 +761,15 @@ export function useJarvis({
       });
 
       if (waCmd.action === 'send') {
-        return finishWithAction(`Right away, sir. Sending your WhatsApp message to ${waCmd.contact} in the background.`);
+        return finishWithAction(`Right away, sir. Sending your WhatsApp message to ${waCmd.contact}.`);
       }
       if (waCmd.action === 'videocall') {
-        return finishWithAction(`Right away, sir. Starting a WhatsApp video call with ${waCmd.contact} in the background.`);
+        return finishWithAction(`Right away, sir. Opening WhatsApp Web and starting a video call with ${waCmd.contact}.`);
       }
       if (waCmd.action === 'call') {
-        return finishWithAction(`Right away, sir. Calling ${waCmd.contact} on WhatsApp in the background.`);
+        return finishWithAction(`Right away, sir. Opening WhatsApp Web and calling ${waCmd.contact}.`);
       }
-      return finishWithAction(`Right away, sir. Opening ${waCmd.contact}'s chat on WhatsApp.`);
+      return finishWithAction(`Right away, sir. Opening ${waCmd.contact}'s chat on WhatsApp Web.`);
     }
 
     // =========================================================================
