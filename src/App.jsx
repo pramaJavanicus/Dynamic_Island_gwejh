@@ -40,7 +40,15 @@ const SPRING = {
   mass: 0.72,
   restDelta: 0.5,
 };
-const EXPANDED = { width: 740, height: 340, borderRadius: 38, y: 8 };
+const EXPANDED = {
+  width: 740,
+  height: 340,
+  borderTopLeftRadius: 38,
+  borderTopRightRadius: 38,
+  borderBottomLeftRadius: 38,
+  borderBottomRightRadius: 38,
+  y: 8,
+};
 
 export default function App() {
   const config = useConfig();
@@ -190,14 +198,46 @@ export default function App() {
       case 'expanded':
         return EXPANDED;
       case 'bt-toast':
-        return { width: 390, height: 56, borderRadius: 28, y: 8 };
+        return {
+          width: 390,
+          height: 56,
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+          borderBottomLeftRadius: 28,
+          borderBottomRightRadius: 28,
+          y: 8,
+        };
       case 'compact':
-        return { width: compactWidth, height: 36, borderRadius: 18, y: 6 };
+        return {
+          width: compactWidth,
+          height: 36,
+          borderTopLeftRadius: 18,
+          borderTopRightRadius: 18,
+          borderBottomLeftRadius: 18,
+          borderBottomRightRadius: 18,
+          y: 6,
+        };
       case 'peek':
-        return { width: peekWidth, height: 32, borderRadius: 16, y: 6 };
+        return {
+          width: peekWidth,
+          height: 32,
+          borderTopLeftRadius: 16,
+          borderTopRightRadius: 16,
+          borderBottomLeftRadius: 16,
+          borderBottomRightRadius: 16,
+          y: 6,
+        };
       case 'hidden':
       default:
-        return { width: 116, height: 7, borderRadius: 10, y: 0 };
+        return {
+          width: 116,
+          height: 7,
+          borderTopLeftRadius: 0,
+          borderTopRightRadius: 0,
+          borderBottomLeftRadius: 10,
+          borderBottomRightRadius: 10,
+          y: 0,
+        };
     }
   })();
 
@@ -397,10 +437,8 @@ export default function App() {
         onDrop={onDrop}
         className={`relative overflow-hidden bg-black text-white transform-gpu ${isExpanded ? 'cursor-default' : 'cursor-pointer'}`}
         style={{
-          willChange: 'width, height, transform, border-radius',
+          willChange: 'width, height, transform',
           backfaceVisibility: 'hidden',
-          borderTopLeftRadius: isHidden ? 0 : targetBox.borderRadius,
-          borderTopRightRadius: isHidden ? 0 : targetBox.borderRadius,
           boxShadow: isExpanded
             ? '0 18px 46px -10px rgba(0,0,0,.68), inset 0 0 0 1px rgba(255,255,255,.09)'
             : isHidden
