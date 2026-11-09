@@ -1259,6 +1259,9 @@ export function useJarvis({
     }
   }, [startListening, status, stopListening, stopSpeaking]);
 
+  const wakeCallbacksRef = useRef({ handleCommand, openIslandTab, startListening });
+  wakeCallbacksRef.current = { handleCommand, openIslandTab, startListening };
+
   // Passive "Hei Jarvis" / "Hey Jarvis" wake-word listener while idle
   useEffect(() => {
     if (status !== 'idle' || !voiceEnabled) return undefined;
@@ -1360,11 +1363,11 @@ export function useJarvis({
 
                     const trailingCmd = String(wakeMatch[1] || '').trim();
                     cleanupWake();
-                    openIslandTab('gemini');
+                    wakeCallbacksRef.current.openIslandTab?.('gemini');
                     if (trailingCmd.split(/\s+/).filter(Boolean).length >= 2) {
-                      await handleCommand(trailingCmd);
+                      await wakeCallbacksRef.current.handleCommand?.(trailingCmd);
                     } else {
-                      await startListening();
+                      await wakeCallbacksRef.current.startListening?.();
                     }
                   })
                   .catch(() => {})
@@ -1389,7 +1392,7 @@ export function useJarvis({
       clearTimeout(bootTimer);
       cleanupWake();
     };
-  }, [handleCommand, openIslandTab, startListening, status, voiceEnabled]);
+  }, [status, voiceEnabled]);
 
   return {
     status,
