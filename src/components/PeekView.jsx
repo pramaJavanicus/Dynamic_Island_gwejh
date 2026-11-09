@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { formatNetSpeed, useBattery } from '../hooks.js';
 import { formatMinSec } from '../clockStore.js';
+import { AutomationStatusBadge } from './AutomationOverlay.jsx';
 
 function MiniEqualizer() {
   return (
@@ -69,7 +70,7 @@ export function BluetoothToastView({ device }) {
   );
 }
 
-export default function PeekView({ sysinfo, clock, media }) {
+export default function PeekView({ sysinfo, clock, media, automationStatus }) {
   const battery = useBattery();
   const temp = sysinfo?.temp;
   const cpu = sysinfo?.cpu;
@@ -81,6 +82,7 @@ export default function PeekView({ sysinfo, clock, media }) {
   const timerRunning = !!clock?.timer?.running;
   const swRunning = !!clock?.stopwatch?.running;
   const musicPlaying = !!(media?.active && media?.status === 'Playing');
+  const autoActive = !!(automationStatus && automationStatus.active !== false);
 
   const tempColor = temp == null
     ? 'text-white/60'
@@ -100,6 +102,14 @@ export default function PeekView({ sysinfo, clock, media }) {
 
   return (
     <div className="flex h-full w-full items-center justify-between gap-2 px-3 text-[11.5px] font-semibold">
+      {/* Live Jarvis Automation Capsule Indicator */}
+      {autoActive && (
+        <>
+          <AutomationStatusBadge status={automationStatus} compact />
+          <span className="h-3 w-px shrink-0 bg-white/15" />
+        </>
+      )}
+
       {/* Live Timer / Stopwatch (if running) */}
       {(timerRunning || swRunning) && (
         <>

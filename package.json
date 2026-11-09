@@ -36,6 +36,10 @@
           "icon.png",
           "icon.ico"
         ]
+      },
+      {
+        "from": "extension",
+        "to": "extension"
       }
     ],
     "win": {

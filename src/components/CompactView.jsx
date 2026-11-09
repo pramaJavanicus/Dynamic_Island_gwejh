@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Layers, BatteryCharging, Hourglass, ArrowDown } from 'lucide-react';
 import { formatNetSpeed, useBattery, useClock } from '../hooks.js';
 import { formatMinSec } from '../clockStore.js';
+import { AutomationStatusBadge } from './AutomationOverlay.jsx';
 
 function Equalizer({ playing }) {
   return (
@@ -19,17 +20,19 @@ function Equalizer({ playing }) {
   );
 }
 
-export default function CompactView({ media, clock, sysinfo, stashCount }) {
+export default function CompactView({ media, clock, sysinfo, stashCount, automationStatus }) {
   const now = useClock();
   const battery = useBattery();
   const time = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   const timerRunning = !!clock?.timer?.running;
   const netDown = sysinfo?.netDown ?? 0;
+  const autoActive = !!(automationStatus && automationStatus.active !== false);
 
   return (
     <div className="flex h-full items-center justify-between gap-2 px-2.5 text-[13px] font-semibold">
       {/* left */}
       <div className="flex min-w-0 flex-1 items-center gap-2">
+        {autoActive && <AutomationStatusBadge status={automationStatus} compact />}
         {timerRunning && (
           <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-400/20 px-2 py-0.5 text-[11px] tabular-nums text-amber-300">
             <Hourglass size={11} />
@@ -39,14 +42,14 @@ export default function CompactView({ media, clock, sysinfo, stashCount }) {
         {media.active ? (
           <>
             {media.thumb ? (
-              <img src={media.thumb} alt="" className="h-6 w-6 shrink-0 rounded-md object-cover" />
+              <img src={media.thumb} alt="" className="h-6 w-6 shrink-0 rounded-md object-cover shadow-sm" />
             ) : (
               <div className="h-6 w-6 shrink-0 rounded-md bg-emerald-500/30" />
             )}
-            <span className="truncate text-[12px] font-medium text-white/80">{media.title}</span>
+            <span className="truncate text-[12px] font-medium text-white/85">{media.title}</span>
           </>
         ) : (
-          !timerRunning && <span className="pl-1 tabular-nums">{time}</span>
+          !timerRunning && !autoActive && <span className="pl-1 tabular-nums">{time}</span>
         )}
       </div>
 

@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "J.A.R.V.I.S. Dynamic Island Bridge",
+  "version": "1.0.0",
+  "description": "Menghubungkan tab Google Chrome utama Anda dengan J.A.R.V.I.S. di Dynamic Island.",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}

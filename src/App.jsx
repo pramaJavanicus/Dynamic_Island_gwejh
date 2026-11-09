@@ -3,9 +3,11 @@ import { motion } from 'framer-motion';
 import CompactView from './components/CompactView.jsx';
 import ExpandedView from './components/ExpandedView.jsx';
 import PeekView, { BluetoothToastView, HiddenLipView } from './components/PeekView.jsx';
+import { AutomationToastView, useAdaptiveAccent } from './components/AutomationOverlay.jsx';
 import { useClipboard, useConfig, useMedia, useStash, useSysInfo } from './hooks.js';
 import { useClockTools } from './clockStore.js';
 import { useJarvis } from './jarvis.js';
+import { useAutomation } from './automation.js';
 
 const api = window.island;
 
@@ -32,17 +34,28 @@ function playBtConnectChime() {
   } catch { /* ignore */ }
 }
 
-// Critically damped spring — zero jitter, 120fps fluid open & close
+// Silky, critically-damped spring — ultra-smooth 120fps morph with zero jitter
 const SPRING = {
   type: 'spring',
-  stiffness: 330,
-  damping: 32,
-  mass: 0.72,
-  restDelta: 0.5,
+  stiffness: 380,
+  damping: 35,
+  mass: 0.68,
+  restDelta: 0.25,
 };
+
 const EXPANDED = {
   width: 740,
   height: 340,
+  borderTopLeftRadius: 38,
+  borderTopRightRadius: 38,
+  borderBottomLeftRadius: 38,
+  borderBottomRightRadius: 38,
+  y: 8,
+};
+
+const EXPANDED_PREVIEW = {
+  width: 740,
+  height: 410,
   borderTopLeftRadius: 38,
   borderTopRightRadius: 38,
   borderBottomLeftRadius: 38,
@@ -56,8 +69,9 @@ export default function App() {
   const sysinfo = useSysInfo();
   const [stashItems, stashActions] = useStash();
   const [clipboardItems, clipboardActions] = useClipboard();
+  const automation = useAutomation();
 
-  // mode: 'hidden' (tiny top lip) | 'peek' (status pill) | 'compact' | 'expanded'
+  // mode: 'hidden' | 'peek' | 'compact' | 'bt-toast' | 'auto-toast' | 'expanded'
   const [mode, setMode] = useState('peek');
   const [pinned, setPinned] = useState(false);
   const [tab, setTab] = useState('home');
@@ -75,6 +89,7 @@ export default function App() {
   const hovered = useRef(false);
   const pinnedRef = useRef(false);
   const modeRef = useRef(mode);
+  const hasPreviewRef = useRef(false);
 
   useEffect(() => {
     pinnedRef.current = pinned;
@@ -82,7 +97,7 @@ export default function App() {
 
   useEffect(() => {
     modeRef.current = mode;
-    api.setExpanded(mode === 'expanded' || mode === 'compact');
+    api.setExpanded(mode === 'expanded' || mode === 'compact' || mode === 'auto-toast');
   }, [mode]);
 
   const expand = useCallback((nextTab) => {
@@ -112,6 +127,7 @@ export default function App() {
     clock,
     sysinfo,
     config,
+    automation,
     onVoiceChatTurn: (user, reply) => {
       setVoiceTurn({ id: Date.now(), user, reply });
     },
@@ -122,14 +138,42 @@ export default function App() {
     jarvisBusyRef.current = jarvis.status !== 'idle';
   }, [jarvis.status]);
 
-  // --- Press "0" anywhere to activate Jarvis voice ---
+  // Auto-expand and keep open while a Google Form preview is awaiting confirmation
+  useEffect(() => {
+    hasPreviewRef.current = !!automation.formPreview;
+    if (automation.formPreview) {
+      expand();
+      setPinned(true);
+      pinnedRef.current = true;
+    }
+  }, [automation.formPreview, expand]);
+
+  // Show capsule status in Peek mode when Jarvis is actively controlling Browser / Form / Code
+  useEffect(() => {
+    if (automation.status?.active && modeRef.current === 'hidden') {
+      setMode('peek');
+    }
+  }, [automation.status]);
+
+  // Show Automation Toast pill when a code/form/browser toast arrives while not expanded
+  useEffect(() => {
+    if (!automation.toast) {
+      setMode((m) => (m === 'auto-toast' ? 'peek' : m));
+      return;
+    }
+    if (modeRef.current !== 'expanded') {
+      clearTimeout(peekTimer.current);
+      setMode('auto-toast');
+    }
+  }, [automation.toast]);
+
+  // --- Press "Ctrl + 0" anywhere to activate Jarvis voice ---
   const jarvisToggleRef = useRef(jarvis.toggleListening);
   useEffect(() => {
     jarvisToggleRef.current = jarvis.toggleListening;
   }, [jarvis.toggleListening]);
 
   useEffect(() => api.jarvis?.onHotkey?.(() => {
-    // Don't hijack "0" while typing inside the island's own inputs (search / Gemini chat / alarm)
     if (inputFocused.current) return;
     if (modeRef.current !== 'expanded') expand();
     jarvisToggleRef.current?.();
@@ -141,7 +185,7 @@ export default function App() {
   const btTimerRef = useRef(null);
 
   useEffect(() => {
-    if (!sysinfo?.ts) return; // wait for first real sample from sysinfo.ps1
+    if (!sysinfo?.ts) return;
     const currentList = Array.isArray(sysinfo.bluetooth) ? sysinfo.bluetooth : [];
     const currentNames = new Set(currentList.map((d) => d.name).filter(Boolean));
 
@@ -171,32 +215,46 @@ export default function App() {
   }, [sysinfo?.bluetooth, sysinfo?.ts, jarvis]);
 
   const activeClock = !!(clock?.timer?.running || clock?.stopwatch?.running);
+  const activeAutomation = !!(automation.status && automation.status.active !== false);
   const activeClockRef = useRef(activeClock);
   useEffect(() => {
-    activeClockRef.current = activeClock;
-    if (activeClock && modeRef.current === 'hidden') {
+    activeClockRef.current = activeClock || activeAutomation;
+    if ((activeClock || activeAutomation) && modeRef.current === 'hidden') {
       setMode('peek');
-    } else if (!activeClock && modeRef.current === 'peek' && !hovered.current && !pinnedRef.current) {
+    } else if (!activeClock && !activeAutomation && modeRef.current === 'peek' && !hovered.current && !pinnedRef.current) {
       clearTimeout(peekTimer.current);
       peekTimer.current = setTimeout(() => {
         if (!activeClockRef.current) setMode((m) => (m === 'peek' ? 'hidden' : m));
       }, 2500);
     }
-  }, [activeClock]);
+  }, [activeClock, activeAutomation]);
 
   const musicPlaying = !!(media?.active && media?.status === 'Playing');
-  const compactWidth = media.active ? 320 : stashItems.length ? 260 : 230;
+  const compactWidth = media.active ? 340 : stashItems.length ? 270 : 240;
   const peekWidth = Math.min(
-    540,
+    620,
     (sysinfo?.bluetooth?.length ? 360 : 295)
       + (activeClock ? 72 : 0)
-      + (musicPlaying ? 115 : 0),
+      + (musicPlaying ? 115 : 0)
+      + (activeAutomation ? 165 : 0),
   );
+
+  const expandedBox = automation.formPreview ? EXPANDED_PREVIEW : EXPANDED;
 
   const targetBox = (() => {
     switch (mode) {
       case 'expanded':
-        return EXPANDED;
+        return expandedBox;
+      case 'auto-toast':
+        return {
+          width: 430,
+          height: 60,
+          borderTopLeftRadius: 30,
+          borderTopRightRadius: 30,
+          borderBottomLeftRadius: 30,
+          borderBottomRightRadius: 30,
+          y: 8,
+        };
       case 'bt-toast':
         return {
           width: 390,
@@ -242,7 +300,7 @@ export default function App() {
   })();
 
   const hideToLip = useCallback((force = false) => {
-    if (!force && (pinnedRef.current || jarvisBusyRef.current)) return; // stay open when pinned or talking to Jarvis!
+    if (!force && (pinnedRef.current || jarvisBusyRef.current || hasPreviewRef.current)) return;
     clearTimeout(hoverTimer.current);
     clearTimeout(leaveTimer.current);
     clearTimeout(peekTimer.current);
@@ -258,7 +316,14 @@ export default function App() {
   const scheduleHide = useCallback(() => {
     clearTimeout(leaveTimer.current);
     leaveTimer.current = setTimeout(() => {
-      if (!pinnedRef.current && !jarvisBusyRef.current && !inputFocused.current && dragDepth.current === 0 && !hovered.current) {
+      if (
+        !pinnedRef.current
+        && !jarvisBusyRef.current
+        && !hasPreviewRef.current
+        && !inputFocused.current
+        && dragDepth.current === 0
+        && !hovered.current
+      ) {
         hideToLip();
       }
     }, config?.collapseDelay ?? 380);
@@ -280,7 +345,7 @@ export default function App() {
     }
 
     const id = setInterval(() => {
-      if (hovered.current || pinnedRef.current || jarvisBusyRef.current || inputFocused.current || dragDepth.current > 0) return;
+      if (hovered.current || pinnedRef.current || jarvisBusyRef.current || hasPreviewRef.current || inputFocused.current || dragDepth.current > 0) return;
       setMode((current) => {
         if (current !== 'hidden') return current;
         api.sysinfo.refresh();
@@ -306,7 +371,6 @@ export default function App() {
     setFocusToken((t) => t + 1);
   }), [expand, hideToLip]);
 
-  // Wake up when cursor touches the top lip (detected by main process or renderer)
   useEffect(() => api.onEdgeHover(() => {
     hovered.current = true;
     clearTimeout(leaveTimer.current);
@@ -315,35 +379,29 @@ export default function App() {
     }
   }), [expand]);
 
-  // Guaranteed close trigger even on ultra-fast mouse flicks out of the overlay window
   useEffect(() => api.onCursorOutside(() => {
     hovered.current = false;
     clearTimeout(hoverTimer.current);
-    if (!pinnedRef.current && !jarvisBusyRef.current && dragDepth.current === 0) {
+    if (!pinnedRef.current && !jarvisBusyRef.current && !hasPreviewRef.current && dragDepth.current === 0) {
       scheduleHide();
     }
   }), [scheduleHide]);
 
-  // Only hide on window blur if NOT pinned
   useEffect(() => api.onBlur(() => {
-    if (!pinnedRef.current && !jarvisBusyRef.current && !internalDrag.current && dragDepth.current === 0 && !hovered.current) {
+    if (!pinnedRef.current && !jarvisBusyRef.current && !hasPreviewRef.current && !internalDrag.current && dragDepth.current === 0 && !hovered.current) {
       hideToLip();
     }
   }), [hideToLip]);
 
   useEffect(() => api.stash.onDragEnd(() => { internalDrag.current = false; }), []);
-
-  // The search input unmounts when switching tabs - reset its focus flag
   useEffect(() => { inputFocused.current = false; }, [tab]);
 
-  // Escape key to unpin & hide
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && hideToLip(true);
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [hideToLip]);
 
-  // --- hover / click ---
   const onMouseEnter = () => {
     hovered.current = true;
     clearTimeout(leaveTimer.current);
@@ -356,7 +414,7 @@ export default function App() {
   const onMouseLeave = () => {
     hovered.current = false;
     clearTimeout(hoverTimer.current);
-    if (!pinnedRef.current && !jarvisBusyRef.current && dragDepth.current === 0) {
+    if (!pinnedRef.current && !jarvisBusyRef.current && !hasPreviewRef.current && dragDepth.current === 0) {
       scheduleHide();
     }
   };
@@ -415,14 +473,25 @@ export default function App() {
     api.stash.startDrag(name);
   };
 
+  const accentRgb = useAdaptiveAccent({
+    media,
+    jarvisStatus: jarvis.status,
+    automationStatus: automation.status,
+    formPreview: automation.formPreview,
+  });
+
   const isExpanded = mode === 'expanded';
+  const isAutoToast = mode === 'auto-toast';
   const isBtToast = mode === 'bt-toast';
   const isCompact = mode === 'compact';
   const isPeek = mode === 'peek';
   const isHidden = mode === 'hidden';
 
   return (
-    <div className="flex h-full w-full justify-center">
+    <div
+      className="flex h-full w-full justify-center"
+      style={{ '--island-accent-rgb': accentRgb }}
+    >
       <motion.div
         ref={islandRef}
         initial={false}
@@ -435,15 +504,15 @@ export default function App() {
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className={`relative overflow-hidden bg-black text-white transform-gpu ${isExpanded ? 'cursor-default' : 'cursor-pointer'}`}
+        className={`island-glass-surface relative overflow-hidden text-white transform-gpu ${isExpanded ? 'cursor-default' : 'cursor-pointer'}`}
         style={{
           willChange: 'width, height, transform',
           backfaceVisibility: 'hidden',
           boxShadow: isExpanded
-            ? '0 18px 46px -10px rgba(0,0,0,.68), inset 0 0 0 1px rgba(255,255,255,.09)'
+            ? `0 20px 50px -12px rgba(0,0,0,.78), 0 0 28px -8px rgba(${accentRgb}, 0.28)`
             : isHidden
-              ? '0 2px 8px rgba(0,0,0,.45), inset 0 -1px 0 rgba(255,255,255,.2)'
-              : '0 6px 18px -4px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.08)',
+              ? '0 2px 8px rgba(0,0,0,.45), inset 0 -1px 0 rgba(255,255,255,.22)'
+              : `0 8px 24px -4px rgba(0,0,0,.62), 0 0 18px -6px rgba(${accentRgb}, 0.22)`,
         }}
       >
         {/* Pre-mounted ExpandedView: zero DOM mount/unmount cost during open/close! */}
@@ -451,22 +520,22 @@ export default function App() {
           initial={false}
           animate={
             isExpanded
-              ? { opacity: 1, scale: 1, y: 0 }
-              : { opacity: 0, scale: 0.92, y: -10 }
+              ? { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }
+              : { opacity: 0, scale: 0.94, y: -8, filter: 'blur(4px)' }
           }
           transition={
             isExpanded
-              ? { duration: 0.22, delay: 0.03, ease: [0.22, 1, 0.36, 1] }
-              : { duration: 0.12, ease: [0.4, 0, 1, 1] }
+              ? { duration: 0.24, delay: 0.02, ease: [0.22, 1, 0.36, 1] }
+              : { duration: 0.14, ease: [0.4, 0, 1, 1] }
           }
           className="absolute top-0 transform-gpu"
           style={{
             left: '50%',
-            marginLeft: -EXPANDED.width / 2,
-            width: EXPANDED.width,
-            height: EXPANDED.height,
+            marginLeft: -expandedBox.width / 2,
+            width: expandedBox.width,
+            height: expandedBox.height,
             pointerEvents: isExpanded ? 'auto' : 'none',
-            willChange: 'transform, opacity',
+            willChange: 'transform, opacity, filter',
           }}
         >
           <ExpandedView
@@ -484,6 +553,7 @@ export default function App() {
             clipboardActions={clipboardActions}
             jarvis={jarvis}
             voiceTurn={voiceTurn}
+            automation={automation}
             dragOver={dragOver}
             focusToken={focusToken}
             onInputFocus={(v) => { inputFocused.current = v; }}
@@ -495,18 +565,35 @@ export default function App() {
         <motion.div
           initial={false}
           animate={{ opacity: isCompact ? 1 : 0, scale: isCompact ? 1 : 0.92 }}
-          transition={{ duration: 0.15 }}
+          transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
           className="absolute inset-0 transform-gpu"
           style={{ pointerEvents: isCompact ? 'auto' : 'none', willChange: 'transform, opacity' }}
         >
-          <CompactView media={media} clock={clock} sysinfo={sysinfo} stashCount={stashItems.length} />
+          <CompactView
+            media={media}
+            clock={clock}
+            sysinfo={sysinfo}
+            stashCount={stashItems.length}
+            automationStatus={automation.status}
+          />
+        </motion.div>
+
+        {/* Automation Toast (VS Code updated / Form submitted / Browser alert) */}
+        <motion.div
+          initial={false}
+          animate={{ opacity: isAutoToast ? 1 : 0, scale: isAutoToast ? 1 : 0.92 }}
+          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+          className="absolute inset-0 transform-gpu"
+          style={{ pointerEvents: isAutoToast ? 'auto' : 'none', willChange: 'transform, opacity' }}
+        >
+          <AutomationToastView toast={automation.toast} onDismiss={automation.dismissToast} />
         </motion.div>
 
         {/* Bluetooth Connected Toast layer */}
         <motion.div
           initial={false}
           animate={{ opacity: isBtToast ? 1 : 0, scale: isBtToast ? 1 : 0.92 }}
-          transition={{ duration: 0.18 }}
+          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
           className="absolute inset-0 transform-gpu"
           style={{ pointerEvents: 'none', willChange: 'transform, opacity' }}
         >
@@ -517,11 +604,16 @@ export default function App() {
         <motion.div
           initial={false}
           animate={{ opacity: isPeek ? 1 : 0, scale: isPeek ? 1 : 0.92 }}
-          transition={{ duration: 0.16 }}
+          transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
           className="absolute inset-0 transform-gpu"
           style={{ pointerEvents: 'none', willChange: 'transform, opacity' }}
         >
-          <PeekView sysinfo={sysinfo} clock={clock} media={media} />
+          <PeekView
+            sysinfo={sysinfo}
+            clock={clock}
+            media={media}
+            automationStatus={automation.status}
+          />
         </motion.div>
 
         {/* Hidden top lip layer */}

@@ -58,7 +58,7 @@ public static class SysAudioNet {
         bool alt   = (GetAsyncKeyState(0x12) & 0x8000) != 0;
         bool zeroDown = ((GetAsyncKeyState(0x30) & 0x8000) != 0) || ((GetAsyncKeyState(0x60) & 0x8000) != 0);
 
-        if (zeroDown && !wasZeroDown && !shift && !ctrl && !alt) {
+        if (zeroDown && !wasZeroDown && ctrl && !shift && !alt) {
             wasZeroDown = true;
             return true;
         }

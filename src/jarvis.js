@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const api = window.island;
 
@@ -314,6 +314,54 @@ function extractWhatsAppCommand(lower) {
   return null;
 }
 
+function extractFileHintFromCommand(rawText) {
+  const text = String(rawText || '').trim();
+  const extMatch = text.match(/\b([A-Za-z0-9_.-]+\.(?:jsx?|tsx?|cjs|mjs|py|json|css|html|vue|go|rs|java|cpp|c|php|rb))\b/i);
+  if (extMatch && extMatch[1]) return extMatch[1];
+
+  const spokenExt = text.match(/\b([A-Za-z0-9_-]+)\s+(?:titik|dot)\s+(jsx?|tsx?|cjs|mjs|py|json|css|html)\b/i);
+  if (spokenExt) return `${spokenExt[1]}.${spokenExt[2].toLowerCase()}`;
+
+  const namedFile = text.match(/\b(?:di|pada|untuk|in)\s+(?:file|berkas)\s+([A-Za-z0-9_.-]{2,32})\b/i);
+  if (namedFile && namedFile[1] && !/^(ini|itu|aktif|tersebut|vscode|kode)$/i.test(namedFile[1])) {
+    return namedFile[1];
+  }
+  return '';
+}
+
+async function resolveFormUrlFromContext(rawText) {
+  const text = String(rawText || '');
+  const urlMatch = text.match(/https?:\/\/[^\s"'<>]+/i)
+    || text.match(/\b(?:docs\.google\.com\/forms\/[^\s"'<>]+|forms\.gle\/[A-Za-z0-9_-]+)/i);
+  if (urlMatch) {
+    const rawUrl = urlMatch[0].startsWith('http') ? urlMatch[0] : `https://${urlMatch[0]}`;
+    const instruction = text.replace(urlMatch[0], ' ').replace(/\s+/g, ' ').trim();
+    return { url: rawUrl, instruction };
+  }
+
+  try {
+    const tabRes = await api.automation?.browser?.({ op: 'list' });
+    const tabs = tabRes?.tabs || [];
+    const formTab = tabs.find((t) => t.active && /docs\.google\.com\/forms|forms\.gle/i.test(t.url))
+      || tabs.find((t) => /docs\.google\.com\/forms|forms\.gle/i.test(t.url))
+      || tabs.find((t) => t.active && /^https?:\/\//i.test(t.url));
+    if (formTab?.url) {
+      return { url: formTab.url, instruction: text };
+    }
+  } catch { /* ignore */ }
+
+  try {
+    const clips = (await api.clipboard?.list?.()) || [];
+    for (const item of clips) {
+      const m = String(item?.text || '').match(/https?:\/\/(?:docs\.google\.com\/forms\/[^\s"'<>]+|forms\.gle\/[A-Za-z0-9_-]+)/i)
+        || String(item?.text || '').match(/^https?:\/\/[^\s"'<>]+$/i);
+      if (m) return { url: m[0], instruction: text };
+    }
+  } catch { /* ignore */ }
+
+  return { url: '', instruction: text };
+}
+
 export function useJarvis({
   setTab,
   setPinned,
@@ -321,6 +369,7 @@ export function useJarvis({
   clock,
   sysinfo,
   config,
+  automation,
   onVoiceChatTurn,
 }) {
   // status: 'idle' | 'listening' | 'processing' | 'speaking'
@@ -495,7 +544,25 @@ export function useJarvis({
         case 'vscode': {
           await api.jarvis.vscode({
             action: act.action || 'open',
+            fileHint: act.fileHint || '',
             instruction: act.instruction || '',
+          });
+          break;
+        }
+        case 'fill_form': {
+          const resolved = await resolveFormUrlFromContext(act.url || act.instruction || '');
+          await api.automation?.formPrepare?.({
+            url: act.url || resolved.url,
+            instruction: act.instruction || resolved.instruction,
+          });
+          break;
+        }
+        case 'browser_tab': {
+          await api.automation?.browser?.({
+            op: act.op || 'switch',
+            query: act.query || '',
+            url: act.url || '',
+            target: act.target || 'auto',
           });
           break;
         }
@@ -773,18 +840,162 @@ export function useJarvis({
     }
 
     // =========================================================================
-    // 2H. VISUAL STUDIO CODE INTEGRATION (Open, Auto-Fix Broken Code, Format, Terminal)
+    // 2G-bis. GOOGLE FORM AUTO-FILL & PREVIEW CONFIRMATION
+    // =========================================================================
+    if (automation?.formPreview) {
+      if (/\b(kirim|submit|konfirmasi|confirm|lanjut\s*kirim|ya\s*kirim)\b.*\b(form|formulir|jawaban|sekarang)?\b/i.test(lower)) {
+        speak('Submitting your Google Form now, sir.');
+        const res = await automation.submitForm();
+        return finishWithAction(res?.reply || 'Done, sir. Your Google Form has been submitted.');
+      }
+      if (/\b(batal|batalkan|cancel|jangan\s*kirim|tutup\s*preview)\b.*\b(form|formulir|submit)?\b/i.test(lower)) {
+        await automation.cancelForm();
+        return finishWithAction('Cancelled the Google Form submission, sir.');
+      }
+    }
+
+    if (
+      /\b(isi|isikan|tolong\s+isi|auto\s*-?\s*fill|fill(?:\s+out|\s+in)?|kerjakan|jawab)\b.*\b(google\s*form|form|formulir|kuesioner|survei|docs\.google\.com\/forms|forms\.gle)\b/i.test(lower)
+      || /\b(docs\.google\.com\/forms|forms\.gle)\b/i.test(lower)
+    ) {
+      const { url, instruction } = await resolveFormUrlFromContext(clean);
+      if (!url) {
+        return finishWithAction('Please provide or open the Google Form link first, sir, and I will fill it out for you.');
+      }
+      speak('Right away, sir. Opening the Google Form, analyzing the questions, and filling in your answers.');
+      const res = await api.automation?.formPrepare?.({ url, instruction });
+      if (res?.ok && res.preview) {
+        setPinned(true);
+      }
+      return finishWithAction(
+        res?.reply || 'I have filled out the Google Form, sir. Please review the preview in Dynamic Island before submitting.',
+      );
+    }
+
+    // =========================================================================
+    // 2G-ter. FULL BROWSER TAB CONTROL (Switch, Close, Reload, Find/List, Read Page)
     // =========================================================================
 
-    // Fix broken code directly inside the active VS Code editor
+    // Read & summarize / analyze active web page content
     if (
-      /\b(perbaiki|diperbaiki|benerin|dibenerin|betulkan|benarkan|fix|debug|solve|koreksi)\b.*\b(kode|code|koding|coding|program|script|error|eror|bug|salah|vscode|vs\s*code|file)/i.test(lower)
-      || /\b(kode|code|koding|coding|program|script).*\b(salah|error|eror|bug|rusak|perbaiki|diperbaiki|benerin|betulkan|fix)/i.test(lower)
+      /\b(baca|bacakan|rangkum|rangkumkan|ringkas|analisis|analisa|jelaskan|apa\s+isi|summarize|read|analyze)\b.*\b(halaman|page|artikel|web|website|situs|tab)\b/i.test(lower)
     ) {
-      speak('Analyzing and fixing your code in Visual Studio Code now, sir.');
-      const res = await api.jarvis.vscode({ action: 'fix', instruction: clean });
+      speak('Reading the active web page now, sir.');
+      const readRes = await api.automation?.browser?.({ op: 'read', maxChars: 14000 });
+      if (!readRes?.ok || !readRes.page?.text) {
+        return finishWithAction('I could not read the active browser tab, sir. Please make sure a web page is open.');
+      }
+      const { title, url, text } = readRes.page;
+      if (!skipAutoChatSwitch) {
+        openIslandTab('gemini');
+        setPinned(true);
+      }
+      const askRes = await api.gemini.ask({
+        messages: [
+          {
+            role: 'user',
+            content: [
+              `User request: ${clean}`,
+              `Active Web Page Title: ${title}`,
+              `URL: ${url}`,
+              '--- PAGE CONTENT ---',
+              text,
+              '--- END CONTENT ---',
+              'Provide a concise, helpful response or summary directly answering the user request.',
+            ].join('\n'),
+          },
+        ],
+      });
       return finishWithAction(
-        res?.reply || 'Done, sir. I have fixed your code in Visual Studio Code.',
+        askRes?.ok && askRes.text
+          ? askRes.text
+          : `I read "${title}", sir, which contains ${text.length} characters of content.`,
+      );
+    }
+
+    // Switch / Activate Browser Tab
+    const switchTabMatch = lower.match(/\b(?:pindah|beralih|ganti|switch|fokus|focus|aktifkan|ke)\s+(?:ke\s+)?tab\s+(.+)/i);
+    if (switchTabMatch && switchTabMatch[1]) {
+      const q = switchTabMatch[1].replace(/\b(di\s+chrome|di\s+browser|sekarang|dong)\b/gi, '').trim();
+      const res = await api.automation?.browser?.({ op: 'switch', query: q });
+      if (res?.ok && res.tab) {
+        return finishWithAction(`Switched to tab "${res.tab.title || q}", sir.`);
+      }
+      return finishWithAction(`I could not find an open tab matching "${q}", sir.`);
+    }
+
+    // Close Browser Tab
+    const closeTabMatch = lower.match(/\b(?:tutup|close|hapus|matikan)\s+tab(?:\s+(.+))?$/i);
+    if (closeTabMatch) {
+      const q = (closeTabMatch[1] || 'active').replace(/\b(di\s+chrome|di\s+browser|sekarang|dong)\b/gi, '').trim() || 'active';
+      const res = await api.automation?.browser?.({ op: 'close', query: q });
+      if (res?.ok && res.tab) {
+        return finishWithAction(`Closed tab "${res.tab.title || q}", sir.`);
+      }
+      return finishWithAction(`I could not find a tab matching "${q}" to close, sir.`);
+    }
+
+    // Reload / Refresh Browser Tab
+    if (/\b(refresh|reload|muat\s+ulang)\s+(tab|halaman|page|web|browser)(?:\s+(.+))?$/i.test(lower)) {
+      const m = lower.match(/\b(?:refresh|reload|muat\s+ulang)\s+(?:tab|halaman|page|web|browser)(?:\s+(.+))?$/i);
+      const q = (m?.[1] || 'active').replace(/\b(ini|aktif|sekarang|dong)\b/gi, '').trim() || 'active';
+      const res = await api.automation?.browser?.({ op: 'reload', query: q });
+      if (res?.ok) {
+        return finishWithAction('Reloaded the browser tab, sir.');
+      }
+      return finishWithAction('I could not find a browser tab to reload, sir.');
+    }
+
+    // List or Search Open Tabs
+    if (/\b(daftar\s+tab|list\s+tabs?|tab\s+apa\s+saja|berapa\s+tab|cari\s+tab)\b/i.test(lower)) {
+      const findMatch = lower.match(/\bcari\s+tab\s+(.+)/i);
+      if (findMatch && findMatch[1]) {
+        const q = findMatch[1].trim();
+        const res = await api.automation?.browser?.({ op: 'switch', query: q });
+        if (res?.ok && res.tab) {
+          return finishWithAction(`Found and focused tab "${res.tab.title}", sir.`);
+        }
+        return finishWithAction(`No open tab matches "${q}", sir.`);
+      }
+      const res = await api.automation?.browser?.({ op: 'list' });
+      const tabs = res?.tabs || [];
+      if (!tabs.length) {
+        return finishWithAction('There are no controlled browser tabs open right now, sir.');
+      }
+      const names = tabs.slice(0, 5).map((t, i) => `${i + 1}. ${t.title || t.url}`).join('; ');
+      return finishWithAction(`You have ${tabs.length} open tab${tabs.length === 1 ? '' : 's'}, sir: ${names}.`);
+    }
+
+    // =========================================================================
+    // 2H. VISUAL STUDIO CODE INTEGRATION (Open, Auto-Fix / Refactor, Undo, Format, Terminal)
+    // =========================================================================
+
+    // Undo last Jarvis code modification
+    if (
+      /\b(undo|batalkan|kembalikan|revert|rollback)\b.*\b(kode|code|perubahan|edit|fix|vscode|vs\s*code|file)\b/i.test(lower)
+    ) {
+      const res = await api.jarvis.vscode({ action: 'undo' });
+      return finishWithAction(res?.reply || 'Reverted the last code change, sir.');
+    }
+
+    // Fix broken code or add/refactor function directly inside the workspace file
+    if (
+      /\b(perbaiki|diperbaiki|benerin|dibenerin|betulkan|benarkan|fix|debug|solve|koreksi|refactor|tambahkan|tambah|buatkan|ubah|modifikasi)\b.*\b(kode|code|koding|coding|program|script|error|eror|bug|salah|fungsi|function|fitur|method|class|komponen|component|vscode|vs\s*code|file)\b/i.test(lower)
+      || /\b(kode|code|koding|coding|program|script|file)\b.*\b(salah|error|eror|bug|rusak|perbaiki|diperbaiki|benerin|betulkan|fix|refactor)\b/i.test(lower)
+    ) {
+      const fileHint = extractFileHintFromCommand(clean);
+      speak(
+        fileHint
+          ? `Analyzing and updating ${fileHint} in Visual Studio Code now, sir.`
+          : 'Analyzing and fixing your code in Visual Studio Code now, sir.',
+      );
+      const res = await api.jarvis.vscode({
+        action: 'fix',
+        fileHint,
+        instruction: clean,
+      });
+      return finishWithAction(
+        res?.reply || 'Done, sir. I have updated your code in Visual Studio Code.',
       );
     }
 
@@ -929,7 +1140,7 @@ export function useJarvis({
       ? res.text
       : 'Apologies, sir. I could not reach the server at the moment.';
     return finishWithAction(reply);
-  }, [clock, config, executeStructuredActions, onVoiceChatTurn, openIslandTab, setPinned, speak, sysinfo]);
+  }, [automation, clock, config, executeStructuredActions, onVoiceChatTurn, openIslandTab, setPinned, speak, sysinfo]);
 
   const stopListening = useCallback(async (cancel = false) => {
     const rec = recorderRef.current;
@@ -1047,6 +1258,138 @@ export function useJarvis({
       startListening();
     }
   }, [startListening, status, stopListening, stopSpeaking]);
+
+  // Passive "Hei Jarvis" / "Hey Jarvis" wake-word listener while idle
+  useEffect(() => {
+    if (status !== 'idle' || !voiceEnabled) return undefined;
+
+    let cancelled = false;
+    let wakeStream = null;
+    let wakeCtx = null;
+    let wakeProcessor = null;
+    let wakeSource = null;
+
+    const cleanupWake = () => {
+      try {
+        wakeProcessor?.disconnect();
+        wakeSource?.disconnect();
+        wakeStream?.getTracks().forEach((t) => t.stop());
+        wakeCtx?.close();
+      } catch { /* ignore */ }
+      wakeProcessor = null;
+      wakeSource = null;
+      wakeStream = null;
+      wakeCtx = null;
+    };
+
+    const bootTimer = setTimeout(async () => {
+      if (cancelled || recorderRef.current) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        if (cancelled || recorderRef.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        wakeStream = stream;
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        wakeCtx = ctx;
+        const source = ctx.createMediaStreamSource(stream);
+        wakeSource = source;
+        const processor = ctx.createScriptProcessor(4096, 1, 1);
+        wakeProcessor = processor;
+
+        let phraseChunks = [];
+        let preRoll = [];
+        let speakingMs = 0;
+        let silenceMs = 0;
+        let isChecking = false;
+
+        processor.onaudioprocess = (e) => {
+          if (cancelled || isChecking || recorderRef.current) return;
+          const input = e.inputBuffer.getChannelData(0);
+          let sum = 0;
+          for (let i = 0; i < input.length; i += 1) sum += input[i] * input[i];
+          const rms = Math.sqrt(sum / input.length);
+          const frameMs = (input.length / ctx.sampleRate) * 1000;
+
+          if (rms > 0.022) {
+            if (speakingMs === 0 && preRoll.length > 0) {
+              phraseChunks.push(...preRoll);
+              preRoll = [];
+            }
+            phraseChunks.push(new Float32Array(input));
+            speakingMs += frameMs;
+            silenceMs = 0;
+
+            if (speakingMs > 5200) {
+              // Too long to be a wake phrase; reset buffer
+              phraseChunks = [];
+              speakingMs = 0;
+              silenceMs = 0;
+            }
+          } else if (speakingMs > 0) {
+            phraseChunks.push(new Float32Array(input));
+            silenceMs += frameMs;
+
+            if (silenceMs >= 680) {
+              const captured = phraseChunks;
+              const dur = speakingMs;
+              const sr = ctx.sampleRate;
+              phraseChunks = [];
+              speakingMs = 0;
+              silenceMs = 0;
+
+              if (dur >= 260 && captured.length >= 3) {
+                isChecking = true;
+                const b64 = downsampleTo16kHzPCMBase64(captured, sr);
+                api.jarvis.transcribe(b64, 'id-ID')
+                  .then(async (stt) => {
+                    if (cancelled || recorderRef.current) return;
+                    const tr = String(stt?.transcript || '').trim();
+                    if (!tr) return;
+                    const wakeMatch = tr.match(/^(?:.*?\b)?(?:hei|hey|hai|halo|ok|oke)\s+jarvis\b[,.:!?\s]*(.*)$/i)
+                      || tr.match(/^jarvis\b[,.:!?\s]*(.*)$/i);
+                    if (!wakeMatch) return;
+
+                    const trailingCmd = String(wakeMatch[1] || '').trim();
+                    cleanupWake();
+                    openIslandTab('gemini');
+                    if (trailingCmd.split(/\s+/).filter(Boolean).length >= 2) {
+                      await handleCommand(trailingCmd);
+                    } else {
+                      await startListening();
+                    }
+                  })
+                  .catch(() => {})
+                  .finally(() => {
+                    isChecking = false;
+                  });
+              }
+            }
+          } else {
+            preRoll.push(new Float32Array(input));
+            if (preRoll.length > 3) preRoll.shift();
+          }
+        };
+
+        source.connect(processor);
+        processor.connect(ctx.destination);
+      } catch { /* ignore mic error in background wake listener */ }
+    }, 900);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(bootTimer);
+      cleanupWake();
+    };
+  }, [handleCommand, openIslandTab, startListening, status, voiceEnabled]);
 
   return {
     status,

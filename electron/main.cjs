@@ -15,6 +15,11 @@ const config = require('./config.cjs');
 const stash = require('./stash.cjs');
 const lyrics = require('./lyrics.cjs');
 const { PsBridge } = require('./ps-bridge.cjs');
+const llm = require('./automation/llm.cjs');
+const { ExtensionBridge } = require('./automation/extensionBridge.cjs');
+const { BrowserController } = require('./automation/browserController.cjs');
+const { FormAutomator } = require('./automation/formAutomator.cjs');
+const { createVsCodeController } = require('./automation/vscodeController.cjs');
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -61,15 +66,28 @@ function isStartupEnabled() {
   return fs.existsSync(STARTUP_LNK);
 }
 
-// Window canvas = max expanded island size (740x340) + room for the shadow
+// Window canvas = max expanded island size + room for form preview & shadow
 const WIN_W = 780;
-const WIN_H = 410;
+const WIN_H = 470;
 // Default hit region = tiny top lip so browser tabs underneath are never blocked
 const LIP_SHAPE = [{ x: Math.round((WIN_W - 140) / 2), y: 0, width: 140, height: 8 }];
 
 let win = null;
 let geminiWin = null;
 let tray = null;
+let extensionBridge = null;
+let browserController = null;
+let formAutomator = null;
+let vscodeController = null;
+let lastJarvisHotkeyAt = 0;
+
+function triggerJarvisHotkey() {
+  const now = Date.now();
+  if (now - lastJarvisHotkeyAt < 450) return;
+  lastJarvisHotkeyAt = now;
+  showIsland();
+  win?.webContents.send('jarvis:hotkey');
+}
 let mediaState = { active: false };
 let sysState = {
   temp: 45, cpu: 12, bluetooth: [], volume: 50, muted: false, netDown: 0, netUp: 0,
@@ -491,100 +509,89 @@ async function resolveVsCodeContext() {
     running: !!status?.running,
     hasFolderWindow: rawTitle.includes(' - '),
     folderPath: bestFolder,
+    folders,
     filePath: targetFile,
     title: rawTitle,
   };
 }
 
-async function runVsCodeAutomation({ action = 'open', instruction = '' } = {}) {
+function getVsCodeController() {
+  if (!vscodeController) {
+    vscodeController = createVsCodeController({
+      llm,
+      backupDir: path.join(app.getPath('userData'), 'vscode-backups'),
+      contextResolver: resolveVsCodeContext,
+      openAtLine: (filePath, line = 1, folderPath = '') => {
+        const gotoArg = `${filePath}:${Math.max(1, Number(line) || 1)}`;
+        if (folderPath) {
+          spawnVsCodeClean([folderPath, '--goto', gotoArg]);
+        } else {
+          spawnVsCodeClean(['--goto', gotoArg]);
+        }
+      },
+    });
+  }
+  return vscodeController;
+}
+
+async function runVsCodeAutomation({ action = 'open', fileHint = '', instruction = '' } = {}) {
   const act = String(action || 'open').toLowerCase().trim();
   const ctx = await resolveVsCodeContext();
 
   if (act === 'open' || act === 'format' || act === 'terminal') {
     if (ctx.running && ctx.hasFolderWindow) {
-      await execVsCodePs1(['-Action', 'open']);
+      await execVsCodePs1(['-Action', act]);
     } else {
       spawnVsCodeClean([ctx.folderPath, ctx.filePath]);
     }
     return { ok: true, folderPath: ctx.folderPath, filePath: ctx.filePath };
   }
 
-  if (act === 'fix') {
-    if (!ctx.filePath || !fs.existsSync(ctx.filePath)) {
-      return {
-        ok: false,
-        reply: 'Please open the code file you want me to fix in Visual Studio Code first, sir.',
-      };
-    }
+  const ctl = getVsCodeController();
 
-    const originalCode = fs.readFileSync(ctx.filePath, 'utf8');
-    if (!originalCode.trim()) {
-      return {
-        ok: false,
-        reply: `The file ${path.basename(ctx.filePath)} is currently empty, sir.`,
-      };
-    }
-
-    const fileName = path.basename(ctx.filePath);
-    const sysPrompt = [
-      'You are J.A.R.V.I.S., an expert senior software engineer integrated into Visual Studio Code.',
-      'Your task: Fix all syntax errors, TypeScript/type errors, runtime bugs, null/undefined issues, and logic bugs in the user\'s code, or apply the user\'s requested modification.',
-      'IMPORTANT RULES:',
-      '1. Return ONLY the complete, corrected source code ready to be saved directly into the file.',
-      '2. Do NOT wrap the output in ``` markdown fences or add any conversational text before/after the code.',
-      '3. Preserve the programming language, comments, and intended structure.',
-    ].join('\n');
-
-    const userPrompt = [
-      `File: ${fileName} (${ctx.filePath})`,
-      instruction ? `User request: ${instruction}` : 'Fix all errors, type complaints, and bugs in this code.',
-      '--- CODE START ---',
-      originalCode,
-      '--- CODE END ---',
-    ].join('\n');
-
-    const res = await fetch('https://text.pollinations.ai/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'openai',
-        messages: [
-          { role: 'system', content: sysPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
+  if (act === 'undo') {
+    win?.webContents.send('automation:status', {
+      kind: 'code',
+      active: true,
+      label: 'Reverting Code Change',
+      detail: 'VS Code',
     });
-    if (!res.ok) {
-      return { ok: false, reply: 'Apologies, sir. I could not reach the code analysis server.' };
+    try {
+      const res = await ctl.undoLast();
+      win?.webContents.send('automation:toast', {
+        tone: res.ok ? 'info' : 'error',
+        kind: 'code',
+        title: res.ok ? `Reverted ${path.basename(res.filePath || 'file')}` : 'Undo Unavailable',
+        message: res.reply,
+      });
+      return res;
+    } finally {
+      win?.webContents.send('automation:status', { kind: 'code', active: false });
     }
+  }
 
-    let fixedCode = (await res.text()).trim();
-    const fenceMatch = fixedCode.match(/^```[a-zA-Z0-9_-]*\r?\n([\s\S]*?)\r?\n```$/);
-    if (fenceMatch && fenceMatch[1]) {
-      fixedCode = fenceMatch[1];
-    } else {
-      fixedCode = fixedCode.replace(/^```[a-zA-Z0-9_-]*\r?\n/, '').replace(/\r?\n```$/, '');
+  if (act === 'fix') {
+    const labelTarget = fileHint || (ctx.filePath ? path.basename(ctx.filePath) : 'Workspace File');
+    win?.webContents.send('automation:status', {
+      kind: 'code',
+      active: true,
+      label: 'Refactoring in VS Code',
+      detail: labelTarget,
+    });
+    try {
+      const res = await ctl.fixFile({ fileHint, instruction });
+      win?.webContents.send('automation:toast', {
+        tone: res.ok ? 'success' : 'error',
+        kind: 'code',
+        title: res.ok
+          ? `Updated ${path.basename(res.filePath || labelTarget)}${res.line ? ` (Line ${res.line})` : ''}`
+          : 'Code Assistant',
+        message: res.reply,
+      });
+      return res;
+    } finally {
+      win?.webContents.send('automation:status', { kind: 'code', active: false });
     }
-
-    if (!fixedCode.trim()) {
-      return { ok: false, reply: 'I could not generate a valid fix for the current file, sir.' };
-    }
-
-    // Write the fixed code directly to the file on disk (VS Code automatically hot-reloads it!)
-    fs.writeFileSync(ctx.filePath, fixedCode, 'utf8');
-
-    // Make sure the workspace folder & fixed file are open and visible in VS Code
-    if (!ctx.running || !ctx.hasFolderWindow) {
-      spawnVsCodeClean([ctx.folderPath, ctx.filePath]);
-    } else {
-      await execVsCodePs1(['-Action', 'open']);
-    }
-
-    return {
-      ok: true,
-      filePath: ctx.filePath,
-      reply: `Done, sir. I have fixed all the errors in ${fileName} directly in Visual Studio Code.`,
-    };
   }
 
   return { ok: false };
@@ -785,15 +792,21 @@ function openGeminiPopup() {
 function registerShortcut() {
   globalShortcut.unregisterAll();
   const accel = config.get().shortcut;
-  if (!accel) return;
-  try {
-    globalShortcut.register(accel, () => {
-      showIsland();
-      win.focus();
-      win.webContents.send('island:toggle');
-    });
-  } catch (e) {
-    console.warn('[shortcut] cannot register', accel, e.message);
+  if (accel) {
+    try {
+      globalShortcut.register(accel, () => {
+        showIsland();
+        win.focus();
+        win.webContents.send('island:toggle');
+      });
+    } catch (e) {
+      console.warn('[shortcut] cannot register', accel, e.message);
+    }
+  }
+  for (const jarvisKey of ['CommandOrControl+0', 'CommandOrControl+num0']) {
+    try {
+      globalShortcut.register(jarvisKey, () => triggerJarvisHotkey());
+    } catch { /* ignore */ }
   }
 }
 
@@ -963,6 +976,116 @@ function registerIpc() {
 
   ipcMain.handle('jarvis:vscode', async (_e, payload = {}) => runVsCodeAutomation(payload));
 
+  // Autonomous Browser, Google Form, and Code Assistant IPC
+  ipcMain.handle('automation:extension-info', () => (
+    browserController
+      ? browserController.extensionStatus()
+      : { connected: false, extensionPath: path.join(ROOT_DIR, 'extension', 'jarvis-bridge') }
+  ));
+
+  ipcMain.handle('automation:browser', async (_e, payload = {}) => {
+    if (!browserController) return { ok: false, error: 'Browser controller not initialized' };
+    const { op = 'list', query = '', url = '', target = 'auto', newTab = true, maxChars = 12000 } = payload;
+    try {
+      switch (op) {
+        case 'list': {
+          const tabs = await browserController.listTabs({ target });
+          return { ok: true, tabs };
+        }
+        case 'open': {
+          const tab = await browserController.openUrl(url || query, { target, newTab });
+          return { ok: true, tab };
+        }
+        case 'switch': {
+          const tab = await browserController.switchTab(query, { target });
+          if (!tab) return { ok: false, error: `Could not find a tab matching "${query}"` };
+          return { ok: true, tab };
+        }
+        case 'close': {
+          const tab = await browserController.closeTab(query || 'active', { target });
+          if (!tab) return { ok: false, error: `Could not find a tab matching "${query}"` };
+          return { ok: true, tab };
+        }
+        case 'reload': {
+          const tab = await browserController.reloadTab(query || 'active', { target });
+          if (!tab) return { ok: false, error: 'No matching tab to reload' };
+          return { ok: true, tab };
+        }
+        case 'find': {
+          const tab = await browserController.findTab(query, { target });
+          return { ok: !!tab, tab };
+        }
+        case 'read': {
+          const page = await browserController.readActivePage({ target, query, maxChars });
+          return { ok: true, page };
+        }
+        default:
+          return { ok: false, error: `Unknown browser op "${op}"` };
+      }
+    } catch (err) {
+      return { ok: false, error: err.message || String(err) };
+    }
+  });
+
+  ipcMain.handle('automation:form-prepare', async (_e, { url = '', instruction = '' } = {}) => {
+    if (!formAutomator) return { ok: false, error: 'Form automator not initialized' };
+    const res = await formAutomator.prepare({ url, instruction });
+    if (res.ok && res.preview) {
+      showIsland();
+      islandExpanded = true;
+      setIgnoreMouse(false);
+      win?.webContents.send('automation:form-preview', res.preview);
+    } else if (!res.ok) {
+      win?.webContents.send('automation:toast', {
+        tone: 'error',
+        kind: 'form',
+        title: 'Google Form Automator',
+        message: res.reply || res.error,
+      });
+    }
+    return res;
+  });
+
+  ipcMain.handle('automation:form-submit', async (_e, sessionId) => {
+    if (!formAutomator) return { ok: false, error: 'Form automator not initialized' };
+    const res = await formAutomator.submit(sessionId);
+    if (res.ok) {
+      win?.webContents.send('automation:form-preview', null);
+      win?.webContents.send('automation:toast', {
+        tone: 'success',
+        kind: 'form',
+        title: 'Google Form Submitted',
+        message: res.reply || 'Your form has been submitted.',
+      });
+    } else {
+      win?.webContents.send('automation:toast', {
+        tone: 'error',
+        kind: 'form',
+        title: 'Submit Failed',
+        message: res.reply || res.error,
+      });
+    }
+    return res;
+  });
+
+  ipcMain.handle('automation:form-cancel', async (_e, sessionId) => {
+    if (formAutomator) await formAutomator.cancel(sessionId);
+    win?.webContents.send('automation:form-preview', null);
+    win?.webContents.send('automation:toast', {
+      tone: 'info',
+      kind: 'form',
+      title: 'Form Cancelled',
+      message: 'Google Form submission cancelled.',
+    });
+    return { ok: true };
+  });
+
+  ipcMain.handle('automation:code', async (_e, payload = {}) => runVsCodeAutomation({
+    action: payload.action || 'fix',
+    fileHint: payload.fileHint || '',
+    instruction: payload.instruction || '',
+  }));
+
   let pendingPowerTimer = null;
   ipcMain.handle('jarvis:power', (_e, { cmd = '', delaySec = 0 } = {}) => {
     const action = String(cmd || '').toLowerCase().trim();
@@ -1047,7 +1170,9 @@ function registerIpc() {
         '11. {"type":"tab","tab":"home|media|clock|stash|gemini"} atau {"type":"pin","value":true}.',
         '12. {"type":"power","cmd":"shutdown|restart|sleep|lock|cancel","delaySec":8} -> kontrol daya laptop: shutdown/matikan laptop (cmd:"shutdown"), restart/mulai ulang laptop (cmd:"restart"), sleep/tidurkan laptop (cmd:"sleep"), kunci layar (cmd:"lock"), atau batalkan shutdown/restart (cmd:"cancel").',
         '13. {"type":"whatsapp","action":"send|call|videocall|open","contact":"nama kontak","message":"isi pesan"} -> jika user minta kirim pesan WhatsApp ke seseorang (action:"send", contact:"kenzie", message:"nanti jam 5 nge gym yuk") atau menelfon seseorang di WhatsApp (action:"call" atau "videocall", contact:"bagas").',
-        '14. {"type":"vscode","action":"open|fix|format|terminal","instruction":"instruksi perbaikan"} -> jika user minta buka VS Code (action:"open"), memperbaiki/benerin kode yang salah/error di VS Code (action:"fix"), merapikan/format kode di VS Code (action:"format"), atau buka terminal VS Code (action:"terminal").',
+        '14. {"type":"vscode","action":"open|fix|undo|format|terminal","fileHint":"nama file opsional","instruction":"instruksi perbaikan/penambahan fungsi"} -> jika user minta buka VS Code (action:"open"), memperbaiki kode / tambah fungsi di file tertentu atau file aktif VS Code (action:"fix", fileHint:"App.jsx", instruction:"..."), batalkan/undo perubahan kode terakhir (action:"undo"), merapikan/format kode (action:"format"), atau buka terminal VS Code (action:"terminal").',
+        '15. {"type":"fill_form","url":"https://docs.google.com/forms/...","instruction":"data dan konteks jawaban"} -> jika user minta mengisi Google Form otomatis.',
+        '16. {"type":"browser_tab","op":"open|switch|close|reload|list|read","query":"nama/nomor tab","url":"https://...","question":"pertanyaan tentang isi halaman"} -> jika user minta kontrol tab browser (pindah/switch tab, tutup/close tab, refresh/reload tab, baca/rangkum isi halaman web yang sedang dibuka).',
         'Jika user hanya bertanya pengetahuan umum / mengobrol tanpa perintah aksi PC, kosongkan array "actions": [] dan isi "reply" dengan jawaban lengkapmu.',
       ].join('\n');
 
@@ -1190,6 +1315,32 @@ app.whenReady().then(async () => {
   registerIpc();
   registerShortcut();
 
+  // Start autonomous browser bridge, controller, and Google Form automator
+  extensionBridge = new ExtensionBridge({ port: 47321 });
+  await extensionBridge.start();
+
+  browserController = new BrowserController({
+    bridge: extensionBridge,
+    userDataDir: path.join(app.getPath('userData'), 'jarvis-chrome-profile'),
+    chromePath: findChromeExe(),
+    extensionPath: path.join(ROOT_DIR, 'extension', 'jarvis-bridge'),
+    cdpPort: 9333,
+  });
+  browserController.on('status', (st) => {
+    win?.webContents.send('automation:status', st);
+  });
+
+  formAutomator = new FormAutomator({ browser: browserController, llm });
+  formAutomator.on('progress', (p) => {
+    const busy = ['opening', 'parsing', 'thinking', 'filling', 'submitting'].includes(p.stage);
+    win?.webContents.send('automation:status', {
+      kind: 'form',
+      active: busy,
+      label: p.stage === 'submitting' ? 'Submitting Google Form' : 'Auto-Filling Google Form',
+      detail: p.message || '',
+    });
+  });
+
   config.watch((nextCfg) => {
     win?.webContents.send('config:changed', nextCfg);
     registerShortcut();
@@ -1204,10 +1355,9 @@ app.whenReady().then(async () => {
   media.start();
 
   sysinfo.on('update', (msg) => {
-    // Global "0" key -> activate Jarvis voice (handled separately so sysState is untouched)
+    // Global Ctrl+0 key -> activate Jarvis voice (handled separately so sysState is untouched)
     if (msg && msg.hotkey === 'jarvis') {
-      showIsland();
-      win?.webContents.send('jarvis:hotkey');
+      triggerJarvisHotkey();
       return;
     }
     if (!msg.error) {
@@ -1274,7 +1424,7 @@ app.whenReady().then(async () => {
     const lipW = config.get()?.edgeZoneWidth || 160;
     const cx = b.x + b.width / 2;
     const inTopLip = pt.y >= b.y && pt.y <= b.y + 12 && Math.abs(pt.x - cx) <= lipW / 2;
-    const inIsland = pt.y >= b.y && pt.y <= b.y + 358 && Math.abs(pt.x - cx) <= 378;
+    const inIsland = pt.y >= b.y && pt.y <= b.y + 445 && Math.abs(pt.x - cx) <= 378;
 
     if (islandExpanded) {
       // While expanded, keep window interactive whenever cursor is inside the 740x340 island
@@ -1308,6 +1458,8 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   media.stop();
   sysinfo.stop();
+  browserController?.dispose?.();
+  extensionBridge?.stop?.();
 });
 
 // Keep running in the tray even if the window gets closed

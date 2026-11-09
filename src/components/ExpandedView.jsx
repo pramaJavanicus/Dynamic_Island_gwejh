@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Home, Music2, Clock, Layers, Sparkles, Pin, PinOff, Thermometer, Battery, BatteryCharging,
-  Headphones, Bluetooth, ArrowDown, Mic, MicOff, Loader2, Volume2,
+  Headphones, Bluetooth, ArrowDown, Mic, MicOff, Loader2, Volume2, FileCheck2,
 } from 'lucide-react';
 import { formatNetSpeed, useBattery, useClock } from '../hooks.js';
 import { formatMinSec } from '../clockStore.js';
@@ -10,6 +10,7 @@ import MediaTab from './MediaTab.jsx';
 import ClockTab from './ClockTab.jsx';
 import StashTab from './StashTab.jsx';
 import GeminiTab from './GeminiTab.jsx';
+import { AutomationStatusBadge, FormPreviewDrawer } from './AutomationOverlay.jsx';
 
 const TABS = [
   { id: 'home', label: 'Home', icon: Home },
@@ -22,7 +23,7 @@ const TABS = [
 export default function ExpandedView({
   tab, setTab, pinned, setPinned, config, media, sysinfo, clock,
   stashItems, stashActions, clipboardItems, clipboardActions,
-  jarvis, voiceTurn,
+  jarvis, voiceTurn, automation,
   dragOver, focusToken, onInputFocus, onDragOut,
 }) {
   const now = useClock();
@@ -35,12 +36,13 @@ export default function ExpandedView({
   const isListening = jarvis?.status === 'listening';
   const isProcessing = jarvis?.status === 'processing';
   const isSpeaking = jarvis?.status === 'speaking';
+  const hasFormPreview = !!automation?.formPreview;
 
   return (
     <div className="flex h-full flex-col px-4 pb-4 pt-3">
       {/* header */}
       <div className="flex w-full items-center justify-between gap-2">
-        <div className="relative flex shrink-0 rounded-full bg-white/[0.07] p-1">
+        <div className="relative flex shrink-0 rounded-full bg-white/[0.06] p-1 ring-1 ring-white/[0.08]">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -49,16 +51,16 @@ export default function ExpandedView({
               onDragEnter={() => {
                 if (id === 'home' || id === 'stash') setTab(id);
               }}
-              className="relative z-10 flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-white/75 transition-colors hover:text-white"
+              className="relative z-10 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-white/75 transition-colors hover:text-white"
             >
-              {tab === id && (
+              {tab === id && !hasFormPreview && (
                 <motion.span
                   layoutId="tab-pill"
-                  className="absolute inset-0 -z-10 rounded-full bg-white/15"
-                  transition={{ type: 'spring', stiffness: 460, damping: 36 }}
+                  className="absolute inset-0 -z-10 rounded-full bg-white/[0.16] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]"
+                  transition={{ type: 'spring', stiffness: 440, damping: 34 }}
                 />
               )}
-              <Icon size={12} className={id === 'gemini' ? 'text-indigo-400' : ''} />
+              <Icon size={12} className={id === 'gemini' ? 'text-indigo-300' : ''} />
               {label}
               {id === 'stash' && stashItems.length > 0 && (
                 <span className="rounded-full bg-sky-500 px-1.5 text-[9px] leading-4 text-white">{stashItems.length}</span>
@@ -73,11 +75,24 @@ export default function ExpandedView({
               )}
             </button>
           ))}
+          {hasFormPreview && (
+            <div className="flex items-center gap-1 rounded-full bg-emerald-400/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-400/35">
+              <FileCheck2 size={12} />
+              Form Preview
+            </div>
+          )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex min-w-0 shrink-0 items-center gap-1.5">
+          {/* Live Automation Status Badge */}
+          <AnimatePresence>
+            {automation?.status && (
+              <AutomationStatusBadge status={automation.status} compact />
+            )}
+          </AnimatePresence>
+
           {/* Live system status pill (Suhu, Baterai Laptop, Network Speed, Bluetooth) */}
-          <div className="flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-[10px] font-medium text-white/80">
+          <div className="flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-[10px] font-medium text-white/80 ring-1 ring-white/[0.07]">
             <span className="flex items-center gap-0.5 tabular-nums" title={`Suhu ~${temp ?? '--'}°C (CPU ${sysinfo?.cpu ?? '--'}%)`}>
               <Thermometer size={11} className={temp >= 75 ? 'text-rose-400' : temp >= 62 ? 'text-amber-300' : 'text-emerald-400'} />
               {temp != null ? `${temp}°C` : '--°C'}
@@ -135,15 +150,15 @@ export default function ExpandedView({
                 ? 'Jarvis sedang mendengarkan… (klik untuk selesai)'
                 : isSpeaking
                   ? 'Jarvis sedang berbicara (klik untuk hentikan)'
-                  : 'Perintah Suara Jarvis (kontrol Dynamic Island & tanya Gemini via suara)'
+                  : 'Perintah Suara Jarvis (Ctrl+0 atau ucapkan "Hei Jarvis")'
             }
             className={`grid h-7 w-7 shrink-0 place-items-center rounded-full transition-all ${
               isListening
-                ? 'bg-rose-500 text-white shadow-[0_0_14px_rgba(244,63,94,0.65)] animate-pulse'
+                ? 'bg-rose-500 text-white shadow-[0_0_16px_rgba(244,63,94,0.7)] animate-pulse'
                 : isProcessing
                   ? 'bg-indigo-500/30 text-indigo-300'
                   : isSpeaking
-                    ? 'bg-cyan-400 text-black shadow-[0_0_12px_rgba(34,211,238,0.5)]'
+                    ? 'bg-cyan-400 text-black shadow-[0_0_14px_rgba(34,211,238,0.55)]'
                     : 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-400/30 hover:bg-cyan-500/25 hover:text-white'
             }`}
           >
@@ -184,10 +199,10 @@ export default function ExpandedView({
             <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-400 animate-ping" />
             {isListening && (
               <span className="truncate">
-                <b>Jarvis mendengar:</b> Ucapkan perintah (mis: <i>"Buka kalkulator"</i>, <i>"Timer 5 menit"</i>, <i>"Putar musik"</i>, atau tanya Gemini)
+                <b>Jarvis mendengar:</b> Ucapkan perintah (mis: <i>&quot;Isi Google Form ini&quot;</i>, <i>&quot;Benerin error di App.jsx&quot;</i>, <i>&quot;Pindah ke tab YouTube&quot;</i>)
               </span>
             )}
-            {isProcessing && <span><b>Jarvis:</b> Memproses suaramu…</span>}
+            {isProcessing && <span><b>Jarvis:</b> Memproses perintahmu…</span>}
             {isSpeaking && (
               <span className="truncate">
                 <b>Jarvis:</b> {jarvis.lastReply || 'Berbicara…'}
@@ -207,40 +222,58 @@ export default function ExpandedView({
       {/* body */}
       <div className="relative mt-3 flex-1">
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={tab}
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -5 }}
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute inset-0"
-          >
-            {tab === 'home' && (
-              <HomeTab
-                config={config}
-                sysinfo={sysinfo}
-                dragOver={dragOver}
-                focusToken={focusToken}
-                onInputFocus={onInputFocus}
+          {hasFormPreview ? (
+            <motion.div
+              key="form-preview"
+              initial={{ opacity: 0, y: 6, scale: 0.985, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -6, scale: 0.985, filter: 'blur(4px)' }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-0"
+            >
+              <FormPreviewDrawer
+                preview={automation.formPreview}
+                submitting={automation.submitting}
+                onSubmit={automation.submitForm}
+                onCancel={automation.cancelForm}
               />
-            )}
-            {tab === 'media' && <MediaTab media={media} sysinfo={sysinfo} />}
-            {tab === 'clock' && <ClockTab clock={clock} onInputFocus={onInputFocus} />}
-            {tab === 'stash' && (
-              <StashTab
-                items={stashItems}
-                actions={stashActions}
-                clipboardItems={clipboardItems}
-                clipboardActions={clipboardActions}
-                dragOver={dragOver}
-                onDragOut={onDragOut}
-                onInputFocus={onInputFocus}
-              />
-            )}
-            {tab === 'gemini' && (
-              <GeminiTab jarvis={jarvis} voiceTurn={voiceTurn} onInputFocus={onInputFocus} />
-            )}
-          </motion.div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 5, scale: 0.99, filter: 'blur(3px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -5, scale: 0.99, filter: 'blur(3px)' }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-0"
+            >
+              {tab === 'home' && (
+                <HomeTab
+                  config={config}
+                  sysinfo={sysinfo}
+                  dragOver={dragOver}
+                  focusToken={focusToken}
+                  onInputFocus={onInputFocus}
+                />
+              )}
+              {tab === 'media' && <MediaTab media={media} sysinfo={sysinfo} />}
+              {tab === 'clock' && <ClockTab clock={clock} onInputFocus={onInputFocus} />}
+              {tab === 'stash' && (
+                <StashTab
+                  items={stashItems}
+                  actions={stashActions}
+                  clipboardItems={clipboardItems}
+                  clipboardActions={clipboardActions}
+                  dragOver={dragOver}
+                  onDragOut={onDragOut}
+                  onInputFocus={onInputFocus}
+                />
+              )}
+              {tab === 'gemini' && (
+                <GeminiTab jarvis={jarvis} voiceTurn={voiceTurn} onInputFocus={onInputFocus} />
+              )}
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
     </div>

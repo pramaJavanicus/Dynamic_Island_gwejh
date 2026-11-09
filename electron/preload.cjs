@@ -45,6 +45,18 @@ contextBridge.exposeInMainWorld('island', {
     onHotkey: (cb) => on('jarvis:hotkey', cb),
   },
 
+  automation: {
+    browser: (payload) => ipcRenderer.invoke('automation:browser', payload),
+    formPrepare: (payload) => ipcRenderer.invoke('automation:form-prepare', payload),
+    formSubmit: (sessionId) => ipcRenderer.invoke('automation:form-submit', sessionId),
+    formCancel: (sessionId) => ipcRenderer.invoke('automation:form-cancel', sessionId),
+    code: (payload) => ipcRenderer.invoke('automation:code', payload),
+    extensionInfo: () => ipcRenderer.invoke('automation:extension-info'),
+    onStatus: (cb) => on('automation:status', cb),
+    onFormPreview: (cb) => on('automation:form-preview', cb),
+    onToast: (cb) => on('automation:toast', cb),
+  },
+
   config: {
     get: () => ipcRenderer.invoke('config:get'),
     open: () => ipcRenderer.send('config:open'),
