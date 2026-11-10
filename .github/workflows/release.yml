@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install dependencies
         run: npm install
@@ -38,16 +38,19 @@ jobs:
             ## 🏝️ Dynamic Island for Windows (${{ github.ref_name }})
 
             ### 📥 Cara Install untuk Teman / Rekan:
-            1. **Versi Installer (Direkomendasikan):** Download **`Dynamic Island Setup 1.0.0.exe`**, klik 2x untuk meng-install. Otomatis membuat shortcut dan berjalan saat laptop dinyalakan.
-            2. **Versi Portable (Tanpa Install):** Download **`Dynamic Island 1.0.0.exe`**, langsung klik 2x untuk menjalankan.
+            1. **Versi Installer (Direkomendasikan):** Download **`Dynamic Island Setup 2.0.0.exe`** (atau `Dynamic.Island.Setup.2.0.0.exe`), klik 2x untuk meng-install. Otomatis membuat shortcut dan berjalan saat laptop dinyalakan.
+            2. **Versi Portable (Tanpa Install):** Download **`Dynamic Island 2.0.0.exe`** (atau `Dynamic.Island.Portable.2.0.0.exe`), langsung klik 2x untuk menjalankan.
 
-            ### ✨ Fitur:
-            - **Smooth 120fps Dynamic Island** dengan mode *Top-Lip* (`7px`) yang tidak menghalangi tab browser + tombol **Pin (`📌`)**.
-            - **Live Status Peek** tiap 30 detik (Suhu Laptop, Baterai Laptop, Kecepatan Internet `KB/s`/`MB/s`, Baterai Bluetooth, Sisa Timer, & Lagu aktif).
-            - **Spotify & Live Synced Lyrics** (Karaoke auto-scroll real-time tanpa perlu login/API key).
-            - **Clock Tools**: Timer (Pomodoro/Fokus), Stopwatch (dengan Lap), & Alarm 24 jam dengan suara *chime*.
-            - **Home Shortcuts & Quick Volume Slider**: Drag & drop aplikasi `.exe` / folder favorit + atur volume & mute langsung dari Dynamic Island.
-            - **File Stash, Catatan Cepat (Scratchpad), & Riwayat Clipboard** (otomatis menyimpan 10 teks terakhir yang di-*copy*).
+            ### ✨ Fitur Terbaru (${{ github.ref_name }}):
+            - **UI Nusa 1.1 × Cyberpunk Notch (`556×236px`)**: Desain kapsul kaca *obsidian* yang ringkas, responsif menutup instan saat kursor menjauh, dilengkapi **Bottom Hover Dock** (titik indikator berubah menjadi ikon saat di-hover).
+            - **Auto Micro-Notch saat Buka Browser/Google**: Otomatis mengecil menjadi kapsul ultra-tipis (`252×26px`) saat sedang aktif membuka Chrome/Edge/Brave/Firefox agar tidak menutupi tab browser.
+            - **Apple-Style System Rings & Kalender Reminder/Checklist**: Lingkaran indikator **Baterai Laptop, Wi-Fi, dan Baterai Bluetooth**, ditambah fitur **Kalender Mingguan (`M T W T F S S`) Interaktif** — klik tanggal mana saja untuk menambah jadwal/reminder & checklist harian.
+            - **Autonomous Jarvis Automation (`Ctrl + 0` / *"Hei Jarvis"*)**:
+              - **Auto-Fill Google Form Mandiri**: Membuka link Google Form, membaca tipe pertanyaan secara cerdas, mencocokkan jawaban dengan konteks, dan menampilkan *Preview* sebelum Submit.
+              - **Kendali Penuh Tab Browser**: Buka URL, pindah tab, refresh, tutup tab, dan baca isi halaman web aktif.
+              - **VS Code Live Code Assistant**: Analisis dan perbaiki kode langsung di workspace lokal serta sorot baris yang diperbaiki di VS Code (`code --goto`).
+            - **Drag & Drop Pintar (`Today` & `Shelf`)**: Tarik aplikasi/folder/file dari Windows Explorer ke **Today** untuk membuat shortcut cepat, atau ke **Shelf** untuk menyimpan file sementara (*File Stash*) & riwayat *Clipboard*.
+            - **Spotify & Live Synced Lyrics + Clock Tools**: Kontrol musik real-time dengan lirik karaoke otomatis, serta Timer, Stopwatch, dan Alarm.
           files: |
             release/*.exe
         env:
