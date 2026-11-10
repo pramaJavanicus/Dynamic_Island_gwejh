@@ -3,9 +3,9 @@ const cache = new Map();
 
 function cleanTrackText(str = '') {
   return String(str)
-    .replace(/\s*\((?:official|lyric|music|audio|video|visualizer|remaster|feat\.|ft\.)[^)]*\)/gi, '')
-    .replace(/\s*\[(?:official|lyric|music|audio|video|visualizer|remaster|feat\.|ft\.)[^\]]*\]/gi, '')
-    .replace(/\s*-\s*(?:remastered|single|version|edit|live|mono|stereo).*$/i, '')
+    .replace(/\s*\((?:official|lyric|music|audio|video|visualizer|remaster|feat\.|ft\.|from\s)[^)]*\)/gi, '')
+    .replace(/\s*\[(?:official|lyric|music|audio|video|visualizer|remaster|feat\.|ft\.|from\s)[^\]]*\]/gi, '')
+    .replace(/\s*-\s*(?:remastered|single|version|edit|live|mono|stereo|from\s).*$/i, '')
     .trim();
 }
 
@@ -82,17 +82,34 @@ async function getLyrics({ title, artist, duration } = {}) {
   const best = pickBest(hits, duration);
   let result;
   if (!best) {
-    result = { status: 'not-found', synced: false, lines: [] };
+    result = { status: 'not-found', synced: false, lines: [], duration: 0 };
   } else if (best.syncedLyrics) {
     const lines = parseLrc(best.syncedLyrics);
-    result = { status: 'ok', synced: true, lines, trackName: best.trackName, artistName: best.artistName };
+    const lastLineTime = lines.length ? lines[lines.length - 1].time + 6 : 0;
+    result = {
+      status: 'ok',
+      synced: true,
+      lines,
+      duration: Number(best.duration) || lastLineTime || 0,
+      trackName: best.trackName,
+      artistName: best.artistName,
+    };
   } else {
-    const lines = String(best.plainLyrics || '')
+    const rawLines = String(best.plainLyrics || '')
       .split(/\r?\n/)
       .map((t) => t.trim())
-      .filter(Boolean)
-      .map((text, idx) => ({ time: idx * 4, text }));
-    result = { status: 'ok', synced: false, lines, trackName: best.trackName, artistName: best.artistName };
+      .filter(Boolean);
+    const estDur = Number(best.duration) || Number(duration) || Math.max(120, rawLines.length * 3.8);
+    const step = rawLines.length > 0 ? estDur / rawLines.length : 3.8;
+    const lines = rawLines.map((text, idx) => ({ time: +(idx * step).toFixed(2), text }));
+    result = {
+      status: 'ok',
+      synced: false,
+      lines,
+      duration: estDur,
+      trackName: best.trackName,
+      artistName: best.artistName,
+    };
   }
 
   cache.set(key, result);

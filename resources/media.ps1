@@ -92,16 +92,52 @@ function Get-State {
     $tl = $s.GetTimelineProperties()
 
     $key = "$($s.SourceAppUserModelId)|$($props.Title)|$($props.Artist)"
+    $nowUtc = [DateTimeOffset]::UtcNow
     if ($key -ne $script:lastKey) {
         $script:lastKey = $key
         $script:thumb = Get-ThumbDataUrl $props
         $script:thumbChanged = $true
         $script:thumbRetries = 0
+        $script:trackStartUtc = $nowUtc
+        $script:lastRawPos = -1
     }
     elseif ($null -eq $script:thumb -and $script:thumbRetries -lt 5) {
         $script:thumbRetries++
         $script:thumb = Get-ThumbDataUrl $props
         if ($script:thumb) { $script:thumbChanged = $true }
+    }
+
+    $rawPos = [math]::Max(0, $tl.Position.TotalSeconds)
+    $rawDur = [math]::Max(0, $tl.EndTime.TotalSeconds)
+    $tlYear = $tl.LastUpdatedTime.Year
+    $statusStr = "$($info.PlaybackStatus)"
+
+    if ($tlYear -gt 2020 -and [math]::Abs(($nowUtc - $tl.LastUpdatedTime).TotalSeconds) -lt 600) {
+        $livePos = $rawPos
+        if ($statusStr -eq 'Playing') {
+            $livePos += [math]::Max(0, ($nowUtc - $tl.LastUpdatedTime).TotalSeconds)
+            $lastUpdMs = $nowUtc.ToUnixTimeMilliseconds()
+        } else {
+            $lastUpdMs = $tl.LastUpdatedTime.ToUnixTimeMilliseconds()
+        }
+    } else {
+        # Fallback if SMTC LastUpdatedTime is 1601-01-01 or not updated by Spotify
+        if ([math]::Abs($rawPos - $script:lastRawPos) -gt 0.5) {
+            $script:lastRawPos = $rawPos
+            $script:trackStartUtc = $nowUtc.AddSeconds(-$rawPos)
+        }
+        if ($statusStr -eq 'Playing') {
+            $livePos = [math]::Max(0, ($nowUtc - $script:trackStartUtc).TotalSeconds)
+            $lastUpdMs = $nowUtc.ToUnixTimeMilliseconds()
+        } else {
+            $livePos = $rawPos
+            $script:trackStartUtc = $nowUtc.AddSeconds(-$rawPos)
+            $lastUpdMs = 0
+        }
+    }
+
+    if ($rawDur -gt 0 -and $livePos -gt $rawDur) {
+        $livePos = $rawDur
     }
 
     return [ordered]@{
@@ -111,12 +147,12 @@ function Get-State {
         title       = $props.Title
         artist      = $props.Artist
         album       = $props.AlbumTitle
-        status      = "$($info.PlaybackStatus)"
+        status      = $statusStr
         canPrev     = $info.Controls.IsPreviousEnabled
         canNext     = $info.Controls.IsNextEnabled
-        position    = [math]::Round($tl.Position.TotalSeconds, 2)
-        duration    = [math]::Round($tl.EndTime.TotalSeconds, 2)
-        lastUpdated = $tl.LastUpdatedTime.ToUnixTimeMilliseconds()
+        position    = [math]::Round($livePos, 2)
+        duration    = [math]::Round($rawDur, 2)
+        lastUpdated = $lastUpdMs
     }
 }
 

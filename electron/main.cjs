@@ -23,6 +23,9 @@ const { createVsCodeController } = require('./automation/vscodeController.cjs');
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
+// Allow WebAudio microphone stream & TTS audio playback without requiring a prior click inside the overlay
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 const isDev = process.env.ELECTRON_DEV === '1';
 const ROOT_DIR = path.join(__dirname, '..');
 const RES_DIR = app.isPackaged ? process.resourcesPath : path.join(ROOT_DIR, 'resources');
@@ -922,14 +925,20 @@ function registerIpc() {
       });
       const rawText = await res.text();
       const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
+      const alternatives = [];
       for (const line of lines) {
         try {
           const parsed = JSON.parse(line);
-          const alt = parsed?.result?.[0]?.alternative?.[0];
-          if (alt?.transcript) {
-            return { ok: true, transcript: String(alt.transcript).trim() };
+          const alts = parsed?.result?.[0]?.alternative || [];
+          for (const a of alts) {
+            if (a?.transcript) {
+              alternatives.push(String(a.transcript).trim());
+            }
           }
         } catch { /* ignore line */ }
+      }
+      if (alternatives.length > 0) {
+        return { ok: true, transcript: alternatives[0], alternatives };
       }
       return { ok: false, error: 'Suara tidak terdengar jelas, coba bicara lagi.' };
     } catch (err) {

@@ -38,10 +38,12 @@ jobs:
             ## 🏝️ Dynamic Island for Windows (${{ github.ref_name }})
 
             ### 📥 Cara Install untuk Teman / Rekan:
-            1. **Versi Installer (Direkomendasikan):** Download **`Dynamic Island Setup 2.0.0.exe`** (atau `Dynamic.Island.Setup.2.0.0.exe`), klik 2x untuk meng-install. Otomatis membuat shortcut dan berjalan saat laptop dinyalakan.
-            2. **Versi Portable (Tanpa Install):** Download **`Dynamic Island 2.0.0.exe`** (atau `Dynamic.Island.Portable.2.0.0.exe`), langsung klik 2x untuk menjalankan.
+            1. **Versi Installer (Direkomendasikan):** Download **`Dynamic.Island.Setup.2.1.0.exe`**, klik 2x untuk meng-install. Otomatis membuat shortcut dan berjalan saat laptop dinyalakan.
+            2. **Versi Portable (Tanpa Install):** Download **`Dynamic.Island.2.1.0.exe`**, langsung klik 2x untuk menjalankan.
 
             ### ✨ Fitur Terbaru (${{ github.ref_name }}):
+            - **Live Mini Synced Lyrics 1-per-1 di Atas Layar**: Saat memutar lagu di Spotify dan kursor tidak menyentuh Dynamic Island, kapsul mini di atas layar otomatis menampilkan potongan lirik 1 per 1 secara real-time lengkap dengan cover lagu mini & equalizer.
+            - **Hands-Free *"Hei Jarvis"* Wake-Word Responsif**: Langsung merespons panggilan suara *"Hei Jarvis"* kapan saja tanpa perlu menekan `Ctrl + 0` atau klik manual (tetap mendukung `Ctrl + 0` sebagai pintasan).
             - **UI Nusa 1.1 × Cyberpunk Notch (`556×236px`)**: Desain kapsul kaca *obsidian* yang ringkas, responsif menutup instan saat kursor menjauh, dilengkapi **Bottom Hover Dock** (titik indikator berubah menjadi ikon saat di-hover).
             - **Auto Micro-Notch saat Buka Browser/Google**: Otomatis mengecil menjadi kapsul ultra-tipis (`252×26px`) saat sedang aktif membuka Chrome/Edge/Brave/Firefox agar tidak menutupi tab browser.
             - **Apple-Style System Rings & Kalender Reminder/Checklist**: Lingkaran indikator **Baterai Laptop, Wi-Fi, dan Baterai Bluetooth**, ditambah fitur **Kalender Mingguan (`M T W T F S S`) Interaktif** — klik tanggal mana saja untuk menambah jadwal/reminder & checklist harian.

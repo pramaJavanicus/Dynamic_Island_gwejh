@@ -2,7 +2,9 @@
 
 Aplikasi overlay simpel ala Dynamic Island buat Windows 10/11. Posisinya ngumpet di bagian paling atas layar, jadi nggak ganggu tab browser dan baru nongol pas kursor diarahkan ke atas.
 
-## Fitur Terbaru (v2.0.0)
+## Fitur Terbaru (v2.1.0)
+- **Live Mini Synced Lyrics (1-per-1) Saat Idle**: Saat lagu Spotify sedang berjalan dan kursor tidak menyentuh Dynamic Island, lirik lagu otomatis tampil bergantian 1 per 1 di kapsul mini bagian atas layar.
+- **Hands-Free *"Hei Jarvis"* Wake-Word**: Panggil *"Hei Jarvis"* langsung dengan suara kapan saja tanpa harus klik atau tekan `Ctrl + 0`.
 - **Desain Nusa 1.1 × Cyberpunk Compact Notch**: Kapsul kaca *obsidian* ringkas (`556×236px`) dengan navigasi *Bottom Hover Dock* dan penutupan instan saat kursor menjauh.
 - **Auto Micro-Notch di Browser**: Otomatis mengecil menjadi kapsul mini (`252×26px`) saat sedang aktif membuka browser/Google agar tidak menghalangi tab.
 - **Apple-Style System Rings & Kalender Reminder**: Indikator lingkaran untuk **Baterai Laptop, Wi-Fi, & Baterai Bluetooth**, ditambah tanggal kalender interaktif (`M T W T F S S`) yang bisa diklik untuk membuat **Reminder & Checklist** harian.
@@ -16,7 +18,7 @@ Aplikasi overlay simpel ala Dynamic Island buat Windows 10/11. Posisinya ngumpet
 
 ## Cara Pakai (Tanpa Ngoding)
 Langsung download file `.exe` di halaman **[Releases](https://github.com/pramaJavanicus/Dynamic_Island_gwejh/releases/latest)**:
-1. Pilih **`Dynamic Island Setup 2.0.0.exe`** (versi installer) atau **`Dynamic Island 2.0.0.exe`** (versi portable langsung jalan tanpa install).
+1. Pilih **`Dynamic.Island.Setup.2.1.0.exe`** (versi installer) atau **`Dynamic.Island.2.1.0.exe`** (versi portable langsung jalan tanpa install).
 2. Kalau muncul info dari Windows SmartScreen, klik **More info** -> **Run anyway**.
 
 ## Jalankan dari Source Code

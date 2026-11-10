@@ -28,13 +28,19 @@ function MiniEqualizer() {
  */
 export function HiddenLipView({
   mediaPlaying,
+  media = null,
   timerRunning,
   jarvisStatus = 'idle',
   currentLyric = null,
+  lyricIndex = -1,
   minimalLip = false,
 }) {
-  // When browser/Google is active (minimalLip = true), render the sleek pure-black micro-notch from Image 4
-  if (minimalLip) {
+  const liveLyricOrTitle = mediaPlaying
+    ? (currentLyric || (media?.title ? `${media.title}${media.artist ? ` · ${media.artist}` : ''}` : null))
+    : null;
+
+  // When browser/Google is active AND no music is playing, render the ultra-slim micro-notch from Image 4
+  if (minimalLip && !liveLyricOrTitle) {
     return (
       <div className="flex h-full w-full items-center justify-center gap-1.5 px-2">
         {timerRunning && <span className="h-1 w-1 rounded-full bg-amber-400 animate-pulse" />}
@@ -43,44 +49,55 @@ export function HiddenLipView({
     );
   }
 
-  const showLyric = mediaPlaying && currentLyric;
-
   return (
-    <div className="relative flex h-full w-full items-center justify-center overflow-hidden px-3">
-      <AnimatePresence mode="wait" initial={false}>
-        {showLyric ? (
-          <motion.div
-            key={currentLyric}
-            initial={{ opacity: 0, y: 4, filter: 'blur(2px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -4, filter: 'blur(2px)' }}
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-            className="flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold text-white"
-          >
-            <Music2 size={11} className="shrink-0 text-cyan-400" />
-            <span className="truncate">{currentLyric}</span>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="mascot-eyes"
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.85 }}
-            transition={{ duration: 0.15 }}
-            className="flex items-center justify-center gap-2"
-          >
+    <div className="relative flex h-full w-full items-center justify-between gap-2 overflow-hidden px-2.5">
+      {liveLyricOrTitle ? (
+        <>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+            {media?.thumb ? (
+              <img
+                src={media.thumb}
+                alt=""
+                className="h-4 w-4 shrink-0 rounded-full object-cover ring-1 ring-cyan-400/50"
+              />
+            ) : (
+              <Music2 size={11.5} className="shrink-0 text-cyan-400" />
+            )}
+            <div className="relative flex-1 overflow-hidden">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={`${lyricIndex}-${liveLyricOrTitle}`}
+                  initial={{ opacity: 0, y: 7, filter: 'blur(2px)' }}
+                  animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, y: -7, filter: 'blur(2px)' }}
+                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  className="truncate text-[11.5px] font-semibold tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+                >
+                  {liveLyricOrTitle}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
             {timerRunning && (
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
             )}
-            <CyberMascotEyes
-              jarvisStatus={jarvisStatus}
-              musicPlaying={mediaPlaying}
-              compact
-            />
-            {mediaPlaying && <MiniEqualizer />}
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <MiniEqualizer />
+          </div>
+        </>
+      ) : (
+        <div className="flex w-full items-center justify-center gap-2">
+          {timerRunning && (
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+          )}
+          <CyberMascotEyes
+            jarvisStatus={jarvisStatus}
+            musicPlaying={mediaPlaying}
+            compact
+          />
+          {mediaPlaying && <MiniEqualizer />}
+        </div>
+      )}
     </div>
   );
 }
@@ -122,7 +139,14 @@ export function BluetoothToastView({ device }) {
   );
 }
 
-export default function PeekView({ sysinfo, clock, media, automationStatus, jarvisStatus = 'idle' }) {
+export default function PeekView({
+  sysinfo,
+  clock,
+  media,
+  currentLyric = null,
+  automationStatus,
+  jarvisStatus = 'idle',
+}) {
   const temp = sysinfo?.temp;
   const timerRunning = !!clock?.timer?.running;
   const swRunning = !!clock?.stopwatch?.running;
@@ -154,8 +178,8 @@ export default function PeekView({ sysinfo, clock, media, automationStatus, jarv
             ) : (
               <Music2 size={11} className="shrink-0 text-cyan-400" />
             )}
-            <span className="max-w-[96px] truncate text-[11px] font-medium text-white/90">
-              {media.title}
+            <span className="max-w-[160px] truncate text-[11px] font-medium text-white/95">
+              {currentLyric || media.title}
             </span>
             <MiniEqualizer />
           </div>

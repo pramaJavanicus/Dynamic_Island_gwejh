@@ -246,19 +246,26 @@ export default function App() {
 
   const musicPlaying = !!(media?.active && media?.status === 'Playing');
   const currentLyric = musicPlaying && lyrics?.currentLine ? String(lyrics.currentLine).trim() : null;
+  const liveLyricOrTitle = musicPlaying
+    ? (currentLyric || (media?.title ? `${media.title}${media.artist ? ` · ${media.artist}` : ''}` : null))
+    : null;
+  const musicPlayingRef = useRef(musicPlaying);
+  useEffect(() => {
+    musicPlayingRef.current = musicPlaying;
+  }, [musicPlaying]);
 
-  const useMinimalBrowserLip = browserActive && !activeAutomation;
+  const useMinimalBrowserLip = browserActive && !activeAutomation && !musicPlaying;
 
   const dynamicIdleWidth = useMinimalBrowserLip
     ? 106
-    : currentLyric
-      ? Math.min(440, Math.max(170, Math.round(currentLyric.length * 6.5 + 52)))
+    : liveLyricOrTitle
+      ? Math.min(440, Math.max(196, Math.round(liveLyricOrTitle.length * 6.8 + 66)))
       : 112;
 
   const dynamicIdleHeight = useMinimalBrowserLip
     ? 9
-    : currentLyric
-      ? 24
+    : liveLyricOrTitle
+      ? 26
       : 22;
 
   const compactWidth = media.active ? 320 : stashItems.length ? 250 : 220;
@@ -378,6 +385,7 @@ export default function App() {
     const id = setInterval(() => {
       if (
         browserActiveRef.current
+        || musicPlayingRef.current
         || hovered.current
         || pinnedRef.current
         || jarvisBusyRef.current
@@ -675,6 +683,7 @@ export default function App() {
               sysinfo={sysinfo}
               clock={clock}
               media={media}
+              currentLyric={currentLyric}
               automationStatus={automation.status}
               jarvisStatus={jarvis.status}
             />
@@ -690,9 +699,11 @@ export default function App() {
           >
             <HiddenLipView
               mediaPlaying={musicPlaying}
+              media={media}
               timerRunning={activeClock}
               jarvisStatus={jarvis.status}
               currentLyric={currentLyric}
+              lyricIndex={lyrics?.activeIndex ?? -1}
               minimalLip={useMinimalBrowserLip}
             />
           </motion.div>

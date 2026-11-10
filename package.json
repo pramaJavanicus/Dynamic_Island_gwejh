@@ -1,7 +1,7 @@
 {
   "name": "dynamic-island",
   "productName": "Dynamic Island",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "iOS-style Dynamic Island overlay for Windows 10/11",
   "main": "electron/main.cjs",
   "author": "zaenal",

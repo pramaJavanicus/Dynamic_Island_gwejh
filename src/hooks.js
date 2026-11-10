@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const api = window.island;
 
@@ -87,26 +87,66 @@ export function useBattery() {
   return battery;
 }
 
-/** Live playback position, interpolated from SMTC timeline data (250ms resolution for synced lyrics). */
+/** Live playback position, interpolated from SMTC timeline data (180ms resolution for 1-by-1 synced lyrics). */
 export function useMediaPosition(media) {
   const [pos, setPos] = useState(0);
+  const anchorRef = useRef({ trackKey: '', basePos: 0, baseTime: Date.now(), lastRawPos: -1 });
+
   useEffect(() => {
+    if (!media?.active) {
+      anchorRef.current = { trackKey: '', basePos: 0, baseTime: Date.now(), lastRawPos: -1 };
+      setPos(0);
+      return undefined;
+    }
+
+    const trackKey = `${media.title || ''}|${media.artist || ''}`;
+    const rawPos = Math.max(0, Number(media.position) || 0);
+    const now = Date.now();
+    const validLastUpdated = (
+      media.lastUpdated
+      && media.lastUpdated > 1700000000000
+      && Math.abs(now - media.lastUpdated) < 600000
+    )
+      ? media.lastUpdated
+      : now;
+
+    if (anchorRef.current.trackKey !== trackKey) {
+      anchorRef.current = {
+        trackKey,
+        basePos: rawPos,
+        baseTime: validLastUpdated,
+        lastRawPos: rawPos,
+      };
+    } else if (rawPos > 0 || anchorRef.current.lastRawPos <= 0) {
+      anchorRef.current = {
+        trackKey,
+        basePos: rawPos,
+        baseTime: validLastUpdated,
+        lastRawPos: rawPos,
+      };
+    }
+
     const calc = () => {
-      if (!media?.duration) return setPos(0);
-      let p = media.position || 0;
-      if (media.status === 'Playing' && media.lastUpdated) p += (Date.now() - media.lastUpdated) / 1000;
-      setPos(Math.min(Math.max(p, 0), media.duration));
+      const a = anchorRef.current;
+      let p = a.basePos;
+      if (media.status === 'Playing') {
+        p += Math.max(0, (Date.now() - a.baseTime) / 1000);
+      }
+      const dur = Number(media.duration) || 0;
+      setPos(dur > 0 ? Math.min(Math.max(p, 0), dur) : Math.max(p, 0));
     };
+
     calc();
-    const id = setInterval(calc, 250);
+    const id = setInterval(calc, 180);
     return () => clearInterval(id);
-  }, [media?.position, media?.lastUpdated, media?.status, media?.duration]);
+  }, [media?.active, media?.title, media?.artist, media?.position, media?.lastUpdated, media?.status, media?.duration]);
+
   return pos;
 }
 
-/** Fetches synced LRC lyrics for the current track and computes the active line index. */
+/** Fetches synced LRC lyrics for the current track and computes the active line index 1-by-1. */
 export function useLyrics(media, position = 0) {
-  const [data, setData] = useState({ status: 'idle', synced: false, lines: [] });
+  const [data, setData] = useState({ status: 'idle', synced: false, lines: [], duration: 0 });
   const title = media?.active ? media.title : '';
   const artist = media?.active ? media.artist : '';
   const duration = media?.active ? media.duration : 0;
@@ -114,30 +154,32 @@ export function useLyrics(media, position = 0) {
   useEffect(() => {
     let cancelled = false;
     if (!title) {
-      setData({ status: 'idle', synced: false, lines: [] });
+      setData({ status: 'idle', synced: false, lines: [], duration: 0 });
       return undefined;
     }
     setData((prev) => ({ ...prev, status: 'loading', lines: [] }));
     api.media.getLyrics({ title, artist, duration }).then((res) => {
       if (!cancelled && res) setData(res);
     }).catch(() => {
-      if (!cancelled) setData({ status: 'error', synced: false, lines: [] });
+      if (!cancelled) setData({ status: 'error', synced: false, lines: [], duration: 0 });
     });
     return () => { cancelled = true; };
   }, [title, artist, duration]);
 
   const lines = data.lines || [];
+  const effectiveDuration = (Number(duration) > 0 ? Number(duration) : Number(data.duration)) || 0;
   let activeIndex = -1;
   if (lines.length > 0) {
     if (data.synced) {
-      const t = (position || 0) + 0.25;
+      const t = (position || 0) + 0.35;
       for (let i = 0; i < lines.length; i += 1) {
         if (lines[i].time <= t) activeIndex = i;
         else break;
       }
       if (activeIndex === -1) activeIndex = 0;
     } else {
-      const ratio = duration > 0 ? Math.min(1, Math.max(0, position / duration)) : 0;
+      const totalDur = effectiveDuration > 0 ? effectiveDuration : Math.max(120, lines.length * 3.8);
+      const ratio = Math.min(0.999, Math.max(0, (position || 0) / totalDur));
       activeIndex = Math.min(lines.length - 1, Math.floor(ratio * lines.length));
     }
   }

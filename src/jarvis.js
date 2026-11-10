@@ -184,6 +184,60 @@ function parseSpokenAlarm(rawLower) {
   return null;
 }
 
+function playJarvisWakeChime() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const notes = [523.25, 783.99]; // C5 -> G5 crisp wake tone
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.085);
+      gain.gain.setValueAtTime(0.001, ctx.currentTime + i * 0.085);
+      gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + i * 0.085 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.085 + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.085);
+      osc.stop(ctx.currentTime + i * 0.085 + 0.24);
+    });
+    setTimeout(() => ctx.close().catch(() => {}), 650);
+  } catch { /* ignore */ }
+}
+
+function matchWakePhrase(candidates = []) {
+  const list = Array.isArray(candidates) ? candidates : [candidates];
+  for (const raw of list) {
+    const tr = String(raw || '').trim();
+    if (!tr) continue;
+
+    // 1. Standard wake prefix: "hei jarvis ...", "hey jarvis ...", "hai jarvis ...", "halo jarvis ...", including common Indonesian STT phonetic variants
+    const m1 = tr.match(
+      /^(?:.*?\b)?(?:hei|hey|hai|halo|hello|hi|he|ok|oke|oi|woi|yo|tes|test)\s+(?:jarvis|jarfis|jervis|jafis|javis|garvis|darvis|carvis|servis|service|travis|arvis|marvis)\b[,.:!?\s]*(.*)$/i,
+    );
+    if (m1) {
+      return { matched: true, trailingCmd: String(m1[1] || '').trim(), raw: tr };
+    }
+
+    // 2. Direct "jarvis ..." at the start of the utterance
+    const m2 = tr.match(/^(?:jarvis|jarfis|jervis|jafis|javis)\b[,.:!?\s]*(.*)$/i);
+    if (m2) {
+      return { matched: true, trailingCmd: String(m2[1] || '').trim(), raw: tr };
+    }
+
+    // 3. "jarvis" anywhere in the phrase with a command before or after
+    const m3 = tr.match(/^(.*?)\b(?:jarvis|jarfis|jervis)\b[,.:!?\s]*(.*)$/i);
+    if (m3) {
+      const combined = `${m3[1] || ''} ${m3[2] || ''}`.replace(/\b(hei|hey|hai|halo|hi|ok|oke)\b/gi, '').trim();
+      return { matched: true, trailingCmd: combined, raw: tr };
+    }
+  }
+  return null;
+}
+
 function downsampleTo16kHzPCMBase64(float32Chunks, inputSampleRate) {
   let totalLen = 0;
   for (const c of float32Chunks) totalLen += c.length;
@@ -1183,6 +1237,9 @@ export function useJarvis({
       return;
     }
 
+    setLastTranscript('');
+    setStatus('listening');
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -1193,6 +1250,9 @@ export function useJarvis({
       });
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        await ctx.resume().catch(() => {});
+      }
       const source = ctx.createMediaStreamSource(stream);
       const processor = ctx.createScriptProcessor(4096, 1, 1);
 
@@ -1210,18 +1270,21 @@ export function useJarvis({
           sum += input[i] * input[i];
         }
         const rms = Math.sqrt(sum / input.length);
-        const uiLevel = Math.min(100, Math.round(rms * 420));
+        const uiLevel = Math.min(100, Math.round(rms * 460));
         setLevel(uiLevel);
 
         const frameMs = (input.length / ctx.sampleRate) * 1000;
-        if (rms > 0.016) {
+        if (rms > 0.0095) {
           hasSpoken = true;
           silenceMs = 0;
         } else if (hasSpoken) {
           silenceMs += frameMs;
-          if (silenceMs >= 1250 && Date.now() - startTime > 1000) {
+          if (silenceMs >= 1150 && Date.now() - startTime > 900) {
             stopListening(false);
           }
+        } else if (Date.now() - startTime > 6500) {
+          // User didn't speak within 6.5s after wake
+          stopListening(true);
         }
       };
 
@@ -1230,7 +1293,7 @@ export function useJarvis({
 
       const maxTimer = setTimeout(() => {
         stopListening(false);
-      }, 10000);
+      }, 11000);
 
       recorderRef.current = {
         ctx,
@@ -1241,8 +1304,6 @@ export function useJarvis({
         sampleRate: ctx.sampleRate,
         maxTimer,
       };
-      setLastTranscript('');
-      setStatus('listening');
     } catch {
       setLastReply('Microphone access unavailable.');
       setStatus('idle');
@@ -1262,7 +1323,7 @@ export function useJarvis({
   const wakeCallbacksRef = useRef({ handleCommand, openIslandTab, startListening });
   wakeCallbacksRef.current = { handleCommand, openIslandTab, startListening };
 
-  // Passive "Hei Jarvis" / "Hey Jarvis" wake-word listener while idle
+  // Always-on hands-free "Hei Jarvis" / "Hey Jarvis" wake-word listener while idle
   useEffect(() => {
     if (status !== 'idle' || !voiceEnabled) return undefined;
 
@@ -1271,8 +1332,13 @@ export function useJarvis({
     let wakeCtx = null;
     let wakeProcessor = null;
     let wakeSource = null;
+    let resumeTimer = null;
 
     const cleanupWake = () => {
+      if (resumeTimer) {
+        clearInterval(resumeTimer);
+        resumeTimer = null;
+      }
       try {
         wakeProcessor?.disconnect();
         wakeSource?.disconnect();
@@ -1303,6 +1369,15 @@ export function useJarvis({
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         const ctx = new AudioCtx();
         wakeCtx = ctx;
+        if (ctx.state === 'suspended') {
+          await ctx.resume().catch(() => {});
+        }
+        resumeTimer = setInterval(() => {
+          if (wakeCtx && wakeCtx.state === 'suspended') {
+            wakeCtx.resume().catch(() => {});
+          }
+        }, 1500);
+
         const source = ctx.createMediaStreamSource(stream);
         wakeSource = source;
         const processor = ctx.createScriptProcessor(4096, 1, 1);
@@ -1310,9 +1385,51 @@ export function useJarvis({
 
         let phraseChunks = [];
         let preRoll = [];
-        let speakingMs = 0;
+        let inSpeech = false;
+        let utteranceMs = 0;
+        let voicedMs = 0;
         let silenceMs = 0;
         let isChecking = false;
+
+        const flushWakeCheck = (captured, sr) => {
+          isChecking = true;
+          const b64 = downsampleTo16kHzPCMBase64(captured, sr);
+          api.jarvis.transcribe(b64, 'id-ID')
+            .then(async (stt) => {
+              if (cancelled || recorderRef.current) return;
+              const candidates = [
+                stt?.transcript,
+                ...(Array.isArray(stt?.alternatives) ? stt.alternatives : []),
+              ].filter(Boolean);
+              if (!candidates.length) return;
+
+              const match = matchWakePhrase(candidates);
+              if (!match?.matched) return;
+
+              const trailingCmd = String(match.trailingCmd || '').trim();
+              const hasImmediateCommand = (
+                trailingCmd.length >= 3
+                && !/^(ya|iya|dong|deh|sih|pak|sir|bro|kak)$/i.test(trailingCmd)
+              );
+
+              cleanupWake();
+              playJarvisWakeChime();
+
+              // Lock status before expanding so cursor-outside never collapses the island
+              setStatus(hasImmediateCommand ? 'processing' : 'listening');
+              wakeCallbacksRef.current.openIslandTab?.('gemini');
+
+              if (hasImmediateCommand) {
+                await wakeCallbacksRef.current.handleCommand?.(trailingCmd);
+              } else {
+                await wakeCallbacksRef.current.startListening?.();
+              }
+            })
+            .catch(() => {})
+            .finally(() => {
+              isChecking = false;
+            });
+        };
 
         processor.onaudioprocess = (e) => {
           if (cancelled || isChecking || recorderRef.current) return;
@@ -1322,70 +1439,60 @@ export function useJarvis({
           const rms = Math.sqrt(sum / input.length);
           const frameMs = (input.length / ctx.sampleRate) * 1000;
 
-          if (rms > 0.022) {
-            if (speakingMs === 0 && preRoll.length > 0) {
-              phraseChunks.push(...preRoll);
-              preRoll = [];
+          if (rms > 0.0085) {
+            if (!inSpeech) {
+              inSpeech = true;
+              if (preRoll.length > 0) {
+                phraseChunks.push(...preRoll);
+                preRoll = [];
+              }
             }
             phraseChunks.push(new Float32Array(input));
-            speakingMs += frameMs;
+            utteranceMs += frameMs;
+            voicedMs += frameMs;
             silenceMs = 0;
 
-            if (speakingMs > 5200) {
-              // Too long to be a wake phrase; reset buffer
-              phraseChunks = [];
-              speakingMs = 0;
-              silenceMs = 0;
-            }
-          } else if (speakingMs > 0) {
-            phraseChunks.push(new Float32Array(input));
-            silenceMs += frameMs;
-
-            if (silenceMs >= 680) {
+            if (utteranceMs >= 4400) {
               const captured = phraseChunks;
-              const dur = speakingMs;
               const sr = ctx.sampleRate;
               phraseChunks = [];
-              speakingMs = 0;
+              inSpeech = false;
+              utteranceMs = 0;
+              voicedMs = 0;
+              silenceMs = 0;
+              if (captured.length >= 3) {
+                flushWakeCheck(captured, sr);
+              }
+            }
+          } else if (inSpeech) {
+            phraseChunks.push(new Float32Array(input));
+            utteranceMs += frameMs;
+            silenceMs += frameMs;
+
+            if (silenceMs >= 460) {
+              const captured = phraseChunks;
+              const vDur = voicedMs;
+              const sr = ctx.sampleRate;
+              phraseChunks = [];
+              inSpeech = false;
+              utteranceMs = 0;
+              voicedMs = 0;
               silenceMs = 0;
 
-              if (dur >= 260 && captured.length >= 3) {
-                isChecking = true;
-                const b64 = downsampleTo16kHzPCMBase64(captured, sr);
-                api.jarvis.transcribe(b64, 'id-ID')
-                  .then(async (stt) => {
-                    if (cancelled || recorderRef.current) return;
-                    const tr = String(stt?.transcript || '').trim();
-                    if (!tr) return;
-                    const wakeMatch = tr.match(/^(?:.*?\b)?(?:hei|hey|hai|halo|ok|oke)\s+jarvis\b[,.:!?\s]*(.*)$/i)
-                      || tr.match(/^jarvis\b[,.:!?\s]*(.*)$/i);
-                    if (!wakeMatch) return;
-
-                    const trailingCmd = String(wakeMatch[1] || '').trim();
-                    cleanupWake();
-                    wakeCallbacksRef.current.openIslandTab?.('gemini');
-                    if (trailingCmd.split(/\s+/).filter(Boolean).length >= 2) {
-                      await wakeCallbacksRef.current.handleCommand?.(trailingCmd);
-                    } else {
-                      await wakeCallbacksRef.current.startListening?.();
-                    }
-                  })
-                  .catch(() => {})
-                  .finally(() => {
-                    isChecking = false;
-                  });
+              if (vDur >= 140 && captured.length >= 2) {
+                flushWakeCheck(captured, sr);
               }
             }
           } else {
             preRoll.push(new Float32Array(input));
-            if (preRoll.length > 3) preRoll.shift();
+            if (preRoll.length > 6) preRoll.shift();
           }
         };
 
         source.connect(processor);
         processor.connect(ctx.destination);
       } catch { /* ignore mic error in background wake listener */ }
-    }, 900);
+    }, 350);
 
     return () => {
       cancelled = true;
