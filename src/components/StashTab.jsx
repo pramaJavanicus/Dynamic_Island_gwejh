@@ -8,7 +8,7 @@ const api = window.island;
 const NOTE_STORAGE_KEY = 'di_scratchpad_v1';
 
 const formatSize = (b) => {
-  if (!b) return '';
+  if (!b) return 'Folder';
   const u = ['B', 'KB', 'MB', 'GB'];
   const i = Math.min(Math.floor(Math.log(b) / Math.log(1024)), u.length - 1);
   return `${(b / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`;
@@ -58,48 +58,57 @@ export default function StashTab({
 
   return (
     <div className="flex h-full gap-3">
-      {/* Left column: Temporary File Shelf */}
-      <div className="flex w-[224px] shrink-0 flex-col gap-2">
+      {/* Left column: Nusa 1.1 "Drop it on the Shelf" */}
+      <div className="flex w-[256px] shrink-0 flex-col gap-2">
         <div className="flex items-center justify-between px-0.5">
-          <span className="text-[11px] font-medium text-white/60">
-            <b className="text-white">{items.length}</b> File Stash
-          </span>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="font-display text-[13px] font-bold text-white">Shelf</span>
+            <span className="rounded-full bg-cyan-500/20 px-1.5 font-mono text-[10px] font-bold text-cyan-300 ring-1 ring-cyan-400/30">
+              {items.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => api.stash.openDir()}
-              title="Buka folder Stash di Explorer"
-              className="flex items-center gap-1 rounded-full bg-white/[0.08] px-2 py-0.5 text-[10.5px] text-white/80 hover:bg-white/15"
+              title="Buka folder Shelf di Explorer"
+              className="flex items-center gap-1 rounded-full bg-white/[0.07] px-2 py-0.5 text-[10px] font-semibold text-white/80 hover:bg-white/15"
             >
-              <FolderOpen size={11} /> Buka
+              <FolderOpen size={11} /> Folder
             </button>
             <button
               type="button"
               onClick={() => actions.clear()}
               disabled={!items.length}
-              title="Kosongkan semua file Stash"
-              className="flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10.5px] text-red-300 hover:bg-red-500/25 disabled:opacity-30"
+              title="Kosongkan semua file di Shelf (Clear all)"
+              className="flex items-center gap-1 rounded-full bg-rose-500/20 px-2.5 py-0.5 text-[10.5px] font-bold text-rose-400 ring-1 ring-rose-500/35 transition hover:bg-rose-500/30 disabled:opacity-30"
             >
-              <Trash2 size={11} /> Clear
+              Clear all
             </button>
           </div>
         </div>
 
         <div
-          className={`relative flex-1 overflow-hidden rounded-2xl border-2 border-dashed transition-colors ${
-            dragOver ? 'border-sky-400 bg-sky-500/10' : 'border-white/10 bg-white/[0.03]'
+          className={`cyber-card relative flex-1 overflow-hidden rounded-2xl border-2 border-dashed transition-all ${
+            dragOver
+              ? 'border-cyan-400 bg-cyan-500/15 shadow-[0_0_24px_rgba(0,240,255,0.28)]'
+              : 'border-white/15 hover:border-cyan-400/35'
           }`}
         >
           {items.length === 0 || dragOver ? (
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1.5 px-3 text-center text-white/45">
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 px-4 text-center">
               <motion.div
-                animate={dragOver ? { y: [0, -5, 0] } : { y: 0 }}
+                animate={dragOver ? { y: [0, -5, 0], scale: 1.08 } : { y: 0, scale: 1 }}
                 transition={{ repeat: dragOver ? Infinity : 0, duration: 0.9 }}
+                className="mb-1 grid h-9 w-9 place-items-center rounded-xl bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-400/30"
               >
-                <Upload size={22} className={dragOver ? 'text-sky-300' : ''} />
+                <Upload size={18} />
               </motion.div>
-              <span className="text-[11px] leading-snug">
-                {dragOver ? 'Lepaskan file di sini' : 'Tarik file/folder sementara ke sini'}
+              <span className="font-display text-[12px] font-bold text-white/90">
+                {dragOver ? 'Lepaskan file ke Shelf' : 'Drop files here'}
+              </span>
+              <span className="text-[10px] text-white/45">
+                Drag out anytime · double-click to open
               </span>
             </div>
           ) : (
@@ -109,32 +118,35 @@ export default function StashTab({
                   <motion.div
                     key={it.name}
                     layout
-                    initial={{ opacity: 0, scale: 0.6 }}
+                    initial={{ opacity: 0, scale: 0.65 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }}
+                    exit={{ opacity: 0, scale: 0.65 }}
                     draggable
                     onDragStart={(e) => {
                       e.preventDefault();
                       onDragOut(it.name);
                     }}
                     onDoubleClick={() => api.stash.openItem(it.name)}
-                    title={`${it.name}${it.isDir ? '' : ` • ${formatSize(it.size)}`}\nTarik keluar • double-click untuk buka`}
-                    className="group relative flex cursor-grab flex-col items-center gap-1 rounded-xl p-1.5 hover:bg-white/[0.08] active:cursor-grabbing"
+                    title={`${it.name}\nTarik keluar • double-click untuk buka`}
+                    className="group relative flex cursor-grab flex-col items-center gap-1 rounded-xl bg-white/[0.04] p-1.5 ring-1 ring-white/[0.06] transition hover:bg-cyan-500/10 hover:ring-cyan-400/35 active:cursor-grabbing"
                   >
                     {it.icon ? (
-                      <img src={it.icon} alt="" className="h-8 w-8 object-contain" />
+                      <img src={it.icon} alt="" className="h-8 w-8 object-contain drop-shadow" />
                     ) : it.isDir ? (
                       <Folder size={28} className="text-amber-300" />
                     ) : (
-                      <FileIcon size={28} className="text-white/70" />
+                      <FileIcon size={28} className="text-cyan-300" />
                     )}
-                    <span className="line-clamp-2 w-full break-all text-center text-[9.5px] leading-tight text-white/80">
+                    <span className="line-clamp-1 w-full break-all text-center text-[10px] font-semibold leading-tight text-white/90">
                       {it.name}
+                    </span>
+                    <span className="font-mono text-[8.5px] text-white/45">
+                      {it.isDir ? 'Folder' : formatSize(it.size)}
                     </span>
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); actions.remove(it.name); }}
-                      className="absolute right-0.5 top-0.5 hidden h-4 w-4 place-items-center rounded-full bg-white/90 text-black group-hover:grid"
+                      className="absolute right-1 top-1 hidden h-4 w-4 place-items-center rounded-full bg-rose-500 text-white shadow group-hover:grid"
                     >
                       <X size={10} strokeWidth={3} />
                     </button>
@@ -149,12 +161,14 @@ export default function StashTab({
       {/* Right column: Quick Notes (Scratchpad) & Clipboard History */}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-center justify-between">
-          <div className="flex rounded-full bg-white/[0.06] p-0.5">
+          <div className="flex rounded-full bg-white/[0.05] p-0.5 ring-1 ring-white/[0.08]">
             <button
               type="button"
               onClick={() => setSubTab('note')}
-              className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-all ${
-                subTab === 'note' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'
+              className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-all ${
+                subTab === 'note'
+                  ? 'bg-gradient-to-r from-cyan-500/30 to-fuchsia-500/30 text-white ring-1 ring-cyan-400/40'
+                  : 'text-white/50 hover:text-white/80'
               }`}
             >
               <StickyNote size={11} />
@@ -163,14 +177,16 @@ export default function StashTab({
             <button
               type="button"
               onClick={() => setSubTab('clipboard')}
-              className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-all ${
-                subTab === 'clipboard' ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'
+              className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-all ${
+                subTab === 'clipboard'
+                  ? 'bg-gradient-to-r from-cyan-500/30 to-fuchsia-500/30 text-white ring-1 ring-cyan-400/40'
+                  : 'text-white/50 hover:text-white/80'
               }`}
             >
               <ClipboardList size={11} />
               Clipboard
               {clipboardItems.length > 0 && (
-                <span className="rounded-full bg-sky-500/25 px-1.5 text-[9.5px] text-sky-300">
+                <span className="rounded-full bg-cyan-500/25 px-1.5 font-mono text-[9.5px] text-cyan-300">
                   {clipboardItems.length}
                 </span>
               )}
@@ -211,7 +227,7 @@ export default function StashTab({
         </div>
 
         {subTab === 'note' ? (
-          <div className="relative flex flex-1 flex-col overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/[0.07] focus-within:ring-white/20">
+          <div className="cyber-card relative flex flex-1 flex-col overflow-hidden rounded-2xl ring-1 ring-white/[0.08] focus-within:ring-cyan-400/40">
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -223,7 +239,7 @@ export default function StashTab({
             />
           </div>
         ) : (
-          <div className="no-scrollbar flex flex-1 flex-col gap-1.5 overflow-y-auto rounded-2xl bg-white/[0.03] p-2 ring-1 ring-white/[0.06]">
+          <div className="cyber-card no-scrollbar flex flex-1 flex-col gap-1.5 overflow-y-auto rounded-2xl p-2 ring-1 ring-white/[0.08]">
             {clipboardItems.length === 0 ? (
               <div className="flex h-full items-center justify-center px-3 text-center text-[11px] text-white/35">
                 Belum ada teks yang di-copy. Setiap teks yang kamu Ctrl+C akan muncul di sini otomatis.
@@ -236,16 +252,16 @@ export default function StashTab({
                     key={item.id}
                     onClick={() => copyClipItem(item)}
                     title="Klik untuk menyalin kembali teks ini"
-                    className="group flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-white/[0.05] px-2.5 py-1.5 transition hover:bg-white/[0.1]"
+                    className="group flex cursor-pointer items-center justify-between gap-2 rounded-xl bg-white/[0.05] px-2.5 py-1.5 ring-1 ring-white/[0.05] transition hover:bg-cyan-500/10 hover:ring-cyan-400/30"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="line-clamp-2 break-all text-[11px] leading-snug text-white/85">
                         {item.text}
                       </div>
-                      <div className="mt-0.5 flex items-center gap-1.5 text-[9.5px] text-white/35">
+                      <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[9.5px] text-white/35">
                         <span>{item.time}</span>
                         {isCopied && (
-                          <span className="font-semibold text-emerald-400">• Tersalin ke Clipboard!</span>
+                          <span className="font-semibold text-cyan-400">• COPIED</span>
                         )}
                       </div>
                     </div>
@@ -257,7 +273,7 @@ export default function StashTab({
                           appendToNote(item.text);
                         }}
                         title="Masukkan ke Catatan Cepat"
-                        className="rounded-lg bg-white/[0.07] p-1 text-white/55 hover:bg-sky-500/25 hover:text-sky-300"
+                        className="rounded-lg bg-white/[0.07] p-1 text-white/55 hover:bg-cyan-500/25 hover:text-cyan-300"
                       >
                         <Plus size={11} />
                       </button>

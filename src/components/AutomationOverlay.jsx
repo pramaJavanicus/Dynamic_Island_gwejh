@@ -98,8 +98,8 @@ export function useAdaptiveAccent({ media, jarvisStatus, automationStatus, formP
   if (automationStatus?.kind === 'code') return '168, 85, 247'; // violet
   if (automationStatus?.kind === 'browser') return '56, 189, 248'; // sky
   if (media?.active && media?.status === 'Playing' && albumRgb) return albumRgb;
-  if (media?.active && media?.status === 'Playing') return '52, 211, 153';
-  return '99, 102, 241'; // indigo default
+  if (media?.active && media?.status === 'Playing') return '0, 240, 255';
+  return '0, 240, 255'; // Cyberpunk x Nusa Electric Cyan default
 }
 
 export function AutomationStatusBadge({ status, compact = false }) {

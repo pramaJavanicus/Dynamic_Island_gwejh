@@ -4,7 +4,10 @@ import CompactView from './components/CompactView.jsx';
 import ExpandedView from './components/ExpandedView.jsx';
 import PeekView, { BluetoothToastView, HiddenLipView } from './components/PeekView.jsx';
 import { AutomationToastView, useAdaptiveAccent } from './components/AutomationOverlay.jsx';
-import { useClipboard, useConfig, useMedia, useStash, useSysInfo } from './hooks.js';
+import { CyberNotchEars } from './components/CyberMascot.jsx';
+import {
+  useClipboard, useConfig, useLyrics, useMedia, useMediaPosition, useStash, useSysInfo,
+} from './hooks.js';
 import { useClockTools } from './clockStore.js';
 import { useJarvis } from './jarvis.js';
 import { useAutomation } from './automation.js';
@@ -43,29 +46,32 @@ const SPRING = {
   restDelta: 0.25,
 };
 
+// Flush top-edge notch geometry (y: 0, top radii: 0, sculpted bottom radii)
 const EXPANDED = {
   width: 740,
-  height: 340,
-  borderTopLeftRadius: 38,
-  borderTopRightRadius: 38,
-  borderBottomLeftRadius: 38,
-  borderBottomRightRadius: 38,
-  y: 8,
+  height: 348,
+  borderTopLeftRadius: 0,
+  borderTopRightRadius: 0,
+  borderBottomLeftRadius: 34,
+  borderBottomRightRadius: 34,
+  y: 0,
 };
 
 const EXPANDED_PREVIEW = {
   width: 740,
-  height: 410,
-  borderTopLeftRadius: 38,
-  borderTopRightRadius: 38,
-  borderBottomLeftRadius: 38,
-  borderBottomRightRadius: 38,
-  y: 8,
+  height: 416,
+  borderTopLeftRadius: 0,
+  borderTopRightRadius: 0,
+  borderBottomLeftRadius: 34,
+  borderBottomRightRadius: 34,
+  y: 0,
 };
 
 export default function App() {
   const config = useConfig();
   const media = useMedia();
+  const mediaPos = useMediaPosition(media);
+  const lyrics = useLyrics(media, mediaPos);
   const sysinfo = useSysInfo();
   const [stashItems, stashActions] = useStash();
   const [clipboardItems, clipboardActions] = useClipboard();
@@ -230,10 +236,19 @@ export default function App() {
   }, [activeClock, activeAutomation]);
 
   const musicPlaying = !!(media?.active && media?.status === 'Playing');
-  const compactWidth = media.active ? 340 : stashItems.length ? 270 : 240;
+  const currentLyric = musicPlaying && lyrics?.currentLine ? String(lyrics.currentLine).trim() : null;
+
+  // Dynamic lyrics width (Nusa 1.1 "Dynamic lyrics — The notch fits every line")
+  const dynamicIdleWidth = currentLyric
+    ? Math.min(520, Math.max(180, Math.round(currentLyric.length * 6.8 + 56)))
+    : musicPlaying
+      ? 148
+      : 126;
+
+  const compactWidth = media.active ? 360 : stashItems.length ? 286 : 254;
   const peekWidth = Math.min(
-    620,
-    (sysinfo?.bluetooth?.length ? 360 : 295)
+    650,
+    (sysinfo?.bluetooth?.length ? 390 : 325)
       + (activeClock ? 72 : 0)
       + (musicPlaying ? 115 : 0)
       + (activeAutomation ? 165 : 0),
@@ -248,52 +263,52 @@ export default function App() {
       case 'auto-toast':
         return {
           width: 430,
-          height: 60,
-          borderTopLeftRadius: 30,
-          borderTopRightRadius: 30,
-          borderBottomLeftRadius: 30,
-          borderBottomRightRadius: 30,
-          y: 8,
+          height: 58,
+          borderTopLeftRadius: 0,
+          borderTopRightRadius: 0,
+          borderBottomLeftRadius: 24,
+          borderBottomRightRadius: 24,
+          y: 0,
         };
       case 'bt-toast':
         return {
           width: 390,
-          height: 56,
-          borderTopLeftRadius: 28,
-          borderTopRightRadius: 28,
-          borderBottomLeftRadius: 28,
-          borderBottomRightRadius: 28,
-          y: 8,
+          height: 54,
+          borderTopLeftRadius: 0,
+          borderTopRightRadius: 0,
+          borderBottomLeftRadius: 24,
+          borderBottomRightRadius: 24,
+          y: 0,
         };
       case 'compact':
         return {
           width: compactWidth,
           height: 36,
-          borderTopLeftRadius: 18,
-          borderTopRightRadius: 18,
+          borderTopLeftRadius: 0,
+          borderTopRightRadius: 0,
           borderBottomLeftRadius: 18,
           borderBottomRightRadius: 18,
-          y: 6,
+          y: 0,
         };
       case 'peek':
         return {
           width: peekWidth,
-          height: 32,
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
-          borderBottomLeftRadius: 16,
-          borderBottomRightRadius: 16,
-          y: 6,
+          height: 34,
+          borderTopLeftRadius: 0,
+          borderTopRightRadius: 0,
+          borderBottomLeftRadius: 18,
+          borderBottomRightRadius: 18,
+          y: 0,
         };
       case 'hidden':
       default:
         return {
-          width: 116,
-          height: 7,
+          width: dynamicIdleWidth,
+          height: 28,
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
-          borderBottomLeftRadius: 10,
-          borderBottomRightRadius: 10,
+          borderBottomLeftRadius: 16,
+          borderBottomRightRadius: 16,
           y: 0,
         };
     }
@@ -504,132 +519,153 @@ export default function App() {
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
-        className={`island-glass-surface relative overflow-hidden text-white transform-gpu ${isExpanded ? 'cursor-default' : 'cursor-pointer'}`}
+        className={`island-glass-surface relative overflow-visible text-white transform-gpu ${isExpanded ? 'cursor-default' : 'cursor-pointer'}`}
         style={{
           willChange: 'width, height, transform',
           backfaceVisibility: 'hidden',
           boxShadow: isExpanded
-            ? `0 20px 50px -12px rgba(0,0,0,.78), 0 0 28px -8px rgba(${accentRgb}, 0.28)`
-            : isHidden
-              ? '0 2px 8px rgba(0,0,0,.45), inset 0 -1px 0 rgba(255,255,255,.22)'
-              : `0 8px 24px -4px rgba(0,0,0,.62), 0 0 18px -6px rgba(${accentRgb}, 0.22)`,
+            ? `0 22px 54px -10px rgba(0,0,0,.85), 0 6px 32px -6px rgba(${accentRgb}, 0.36), 0 2px 18px -4px rgba(0, 240, 255, 0.28)`
+            : `0 10px 28px -4px rgba(0,0,0,.78), 0 4px 20px -3px rgba(${accentRgb}, 0.42), 0 2px 14px -2px rgba(0, 240, 255, 0.35)`,
         }}
       >
-        {/* Pre-mounted ExpandedView: zero DOM mount/unmount cost during open/close! */}
-        <motion.div
-          initial={false}
-          animate={
-            isExpanded
-              ? { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }
-              : { opacity: 0, scale: 0.94, y: -8, filter: 'blur(4px)' }
-          }
-          transition={
-            isExpanded
-              ? { duration: 0.24, delay: 0.02, ease: [0.22, 1, 0.36, 1] }
-              : { duration: 0.14, ease: [0.4, 0, 1, 1] }
-          }
-          className="absolute top-0 transform-gpu"
+        {/* Nusa 1.1 Concave Top-Edge Shoulder Fillets ("Notch Ears") */}
+        <CyberNotchEars size={isExpanded ? 16 : 12} color="#05060b" />
+
+        {/* Inner clipped content container */}
+        <div
+          className="relative h-full w-full overflow-hidden"
           style={{
-            left: '50%',
-            marginLeft: -expandedBox.width / 2,
-            width: expandedBox.width,
-            height: expandedBox.height,
-            pointerEvents: isExpanded ? 'auto' : 'none',
-            willChange: 'transform, opacity, filter',
+            borderBottomLeftRadius: targetBox.borderBottomLeftRadius,
+            borderBottomRightRadius: targetBox.borderBottomRightRadius,
           }}
         >
-          <ExpandedView
-            tab={tab}
-            setTab={setTab}
-            pinned={pinned}
-            setPinned={setPinned}
-            config={config}
-            media={media}
-            sysinfo={sysinfo}
-            clock={clock}
-            stashItems={stashItems}
-            stashActions={stashActions}
-            clipboardItems={clipboardItems}
-            clipboardActions={clipboardActions}
-            jarvis={jarvis}
-            voiceTurn={voiceTurn}
-            automation={automation}
-            dragOver={dragOver}
-            focusToken={focusToken}
-            onInputFocus={(v) => { inputFocused.current = v; }}
-            onDragOut={startDragOut}
+          {/* Signature Nusa 1.1 x Cyberpunk Neon Bottom Horizon Bar */}
+          <div
+            className={`nusa-bottom-glow pointer-events-none absolute inset-x-3 bottom-0 transition-all duration-300 ${
+              isExpanded ? 'h-[3px] opacity-75' : 'h-[4.5px] opacity-95'
+            }`}
           />
-        </motion.div>
 
-        {/* Compact view layer */}
-        <motion.div
-          initial={false}
-          animate={{ opacity: isCompact ? 1 : 0, scale: isCompact ? 1 : 0.92 }}
-          transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute inset-0 transform-gpu"
-          style={{ pointerEvents: isCompact ? 'auto' : 'none', willChange: 'transform, opacity' }}
-        >
-          <CompactView
-            media={media}
-            clock={clock}
-            sysinfo={sysinfo}
-            stashCount={stashItems.length}
-            automationStatus={automation.status}
-          />
-        </motion.div>
+          {/* Pre-mounted ExpandedView: zero DOM mount/unmount cost during open/close! */}
+          <motion.div
+            initial={false}
+            animate={
+              isExpanded
+                ? { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }
+                : { opacity: 0, scale: 0.94, y: -8, filter: 'blur(4px)' }
+            }
+            transition={
+              isExpanded
+                ? { duration: 0.24, delay: 0.02, ease: [0.22, 1, 0.36, 1] }
+                : { duration: 0.14, ease: [0.4, 0, 1, 1] }
+            }
+            className="absolute top-0 transform-gpu"
+            style={{
+              left: '50%',
+              marginLeft: -expandedBox.width / 2,
+              width: expandedBox.width,
+              height: expandedBox.height,
+              pointerEvents: isExpanded ? 'auto' : 'none',
+              willChange: 'transform, opacity, filter',
+            }}
+          >
+            <ExpandedView
+              tab={tab}
+              setTab={setTab}
+              pinned={pinned}
+              setPinned={setPinned}
+              config={config}
+              media={media}
+              sysinfo={sysinfo}
+              clock={clock}
+              stashItems={stashItems}
+              stashActions={stashActions}
+              clipboardItems={clipboardItems}
+              clipboardActions={clipboardActions}
+              jarvis={jarvis}
+              voiceTurn={voiceTurn}
+              automation={automation}
+              dragOver={dragOver}
+              focusToken={focusToken}
+              onInputFocus={(v) => { inputFocused.current = v; }}
+              onDragOut={startDragOut}
+            />
+          </motion.div>
 
-        {/* Automation Toast (VS Code updated / Form submitted / Browser alert) */}
-        <motion.div
-          initial={false}
-          animate={{ opacity: isAutoToast ? 1 : 0, scale: isAutoToast ? 1 : 0.92 }}
-          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute inset-0 transform-gpu"
-          style={{ pointerEvents: isAutoToast ? 'auto' : 'none', willChange: 'transform, opacity' }}
-        >
-          <AutomationToastView toast={automation.toast} onDismiss={automation.dismissToast} />
-        </motion.div>
+          {/* Compact view layer */}
+          <motion.div
+            initial={false}
+            animate={{ opacity: isCompact ? 1 : 0, scale: isCompact ? 1 : 0.92 }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute inset-0 transform-gpu"
+            style={{ pointerEvents: isCompact ? 'auto' : 'none', willChange: 'transform, opacity' }}
+          >
+            <CompactView
+              media={media}
+              clock={clock}
+              sysinfo={sysinfo}
+              stashCount={stashItems.length}
+              automationStatus={automation.status}
+              jarvisStatus={jarvis.status}
+            />
+          </motion.div>
 
-        {/* Bluetooth Connected Toast layer */}
-        <motion.div
-          initial={false}
-          animate={{ opacity: isBtToast ? 1 : 0, scale: isBtToast ? 1 : 0.92 }}
-          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute inset-0 transform-gpu"
-          style={{ pointerEvents: 'none', willChange: 'transform, opacity' }}
-        >
-          <BluetoothToastView device={btAlert} />
-        </motion.div>
+          {/* Automation Toast (VS Code updated / Form submitted / Browser alert) */}
+          <motion.div
+            initial={false}
+            animate={{ opacity: isAutoToast ? 1 : 0, scale: isAutoToast ? 1 : 0.92 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute inset-0 transform-gpu"
+            style={{ pointerEvents: isAutoToast ? 'auto' : 'none', willChange: 'transform, opacity' }}
+          >
+            <AutomationToastView toast={automation.toast} onDismiss={automation.dismissToast} />
+          </motion.div>
 
-        {/* Status Peek view layer */}
-        <motion.div
-          initial={false}
-          animate={{ opacity: isPeek ? 1 : 0, scale: isPeek ? 1 : 0.92 }}
-          transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute inset-0 transform-gpu"
-          style={{ pointerEvents: 'none', willChange: 'transform, opacity' }}
-        >
-          <PeekView
-            sysinfo={sysinfo}
-            clock={clock}
-            media={media}
-            automationStatus={automation.status}
-          />
-        </motion.div>
+          {/* Bluetooth Connected Toast layer */}
+          <motion.div
+            initial={false}
+            animate={{ opacity: isBtToast ? 1 : 0, scale: isBtToast ? 1 : 0.92 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute inset-0 transform-gpu"
+            style={{ pointerEvents: 'none', willChange: 'transform, opacity' }}
+          >
+            <BluetoothToastView device={btAlert} />
+          </motion.div>
 
-        {/* Hidden top lip layer */}
-        <motion.div
-          initial={false}
-          animate={{ opacity: isHidden ? 1 : 0 }}
-          transition={{ duration: 0.14 }}
-          className="absolute inset-0"
-          style={{ pointerEvents: 'none' }}
-        >
-          <HiddenLipView
-            mediaPlaying={media.status === 'Playing'}
-            timerRunning={activeClock}
-            stashCount={stashItems.length}
-          />
-        </motion.div>
+          {/* Status Peek view layer */}
+          <motion.div
+            initial={false}
+            animate={{ opacity: isPeek ? 1 : 0, scale: isPeek ? 1 : 0.92 }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute inset-0 transform-gpu"
+            style={{ pointerEvents: 'none', willChange: 'transform, opacity' }}
+          >
+            <PeekView
+              sysinfo={sysinfo}
+              clock={clock}
+              media={media}
+              automationStatus={automation.status}
+              jarvisStatus={jarvis.status}
+            />
+          </motion.div>
+
+          {/* Idle Cyber-Nusa Mascot / Dynamic Lyrics Notch layer */}
+          <motion.div
+            initial={false}
+            animate={{ opacity: isHidden ? 1 : 0 }}
+            transition={{ duration: 0.14 }}
+            className="absolute inset-0"
+            style={{ pointerEvents: 'none' }}
+          >
+            <HiddenLipView
+              mediaPlaying={musicPlaying}
+              timerRunning={activeClock}
+              stashCount={stashItems.length}
+              jarvisStatus={jarvis.status}
+              currentLyric={currentLyric}
+            />
+          </motion.div>
+        </div>
       </motion.div>
     </div>
   );

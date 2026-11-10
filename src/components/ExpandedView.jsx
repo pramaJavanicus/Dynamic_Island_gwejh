@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Home, Music2, Clock, Layers, Sparkles, Pin, PinOff, Thermometer, Battery, BatteryCharging,
-  Headphones, Bluetooth, ArrowDown, Mic, MicOff, Loader2, Volume2, FileCheck2,
+  Headphones, Bluetooth, ArrowDown, Mic, MicOff, Loader2, Volume2, FileCheck2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { formatNetSpeed, useBattery, useClock } from '../hooks.js';
 import { formatMinSec } from '../clockStore.js';
@@ -11,13 +12,14 @@ import ClockTab from './ClockTab.jsx';
 import StashTab from './StashTab.jsx';
 import GeminiTab from './GeminiTab.jsx';
 import { AutomationStatusBadge, FormPreviewDrawer } from './AutomationOverlay.jsx';
+import { CyberCatBadge, HoverVolumeSlider } from './CyberMascot.jsx';
 
 const TABS = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'media', label: 'Music', icon: Music2 },
-  { id: 'clock', label: 'Clock', icon: Clock },
-  { id: 'stash', label: 'Stash', icon: Layers },
-  { id: 'gemini', label: 'Gemini', icon: Sparkles },
+  { id: 'home', label: 'Home', icon: Home, accent: 'text-cyan-300' },
+  { id: 'media', label: 'Music', icon: Music2, accent: 'text-fuchsia-300' },
+  { id: 'clock', label: 'Clock', icon: Clock, accent: 'text-amber-300' },
+  { id: 'stash', label: 'Shelf', icon: Layers, accent: 'text-sky-300' },
+  { id: 'gemini', label: 'Jarvis', icon: Sparkles, accent: 'text-indigo-300' },
 ];
 
 export default function ExpandedView({
@@ -26,6 +28,7 @@ export default function ExpandedView({
   jarvis, voiceTurn, automation,
   dragOver, focusToken, onInputFocus, onDragOut,
 }) {
+  const [bottomDockHover, setBottomDockHover] = useState(false);
   const now = useClock();
   const battery = useBattery();
   const temp = sysinfo?.temp;
@@ -38,49 +41,108 @@ export default function ExpandedView({
   const isSpeaking = jarvis?.status === 'speaking';
   const hasFormPreview = !!automation?.formPreview;
 
+  const currentTabIdx = Math.max(0, TABS.findIndex((t) => t.id === tab));
+  const cycleTab = (dir) => {
+    const nextIdx = (currentTabIdx + dir + TABS.length) % TABS.length;
+    setTab(TABS[nextIdx].id);
+  };
+
   return (
-    <div className="flex h-full flex-col px-4 pb-4 pt-3">
-      {/* header */}
+    <div className="relative flex h-full flex-col px-5 pb-3 pt-2.5">
+      {/* Cyberpunk top-corner HUD bracket accents */}
+      <span className="pointer-events-none absolute left-3 top-2 h-2 w-2 border-l border-t border-cyan-400/50" />
+      <span className="pointer-events-none absolute right-3 top-2 h-2 w-2 border-r border-t border-fuchsia-400/50" />
+      <span className="pointer-events-none absolute bottom-2.5 left-4 h-2 w-2 border-b border-l border-cyan-400/40" />
+      <span className="pointer-events-none absolute bottom-2.5 right-4 h-2 w-2 border-b border-r border-fuchsia-400/40" />
+
+      {/* Left & Right Nusa 1.1 "<" ">" quick page cycle arrows */}
+      {!hasFormPreview && (
+        <>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              cycleTab(-1);
+            }}
+            title="Halaman sebelumnya"
+            className="absolute left-1 top-1/2 z-20 flex h-7 w-4 -translate-y-1/2 items-center justify-center rounded-full text-white/30 transition hover:bg-white/[0.08] hover:text-cyan-300"
+          >
+            <ChevronLeft size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              cycleTab(1);
+            }}
+            title="Halaman berikutnya"
+            className="absolute right-1 top-1/2 z-20 flex h-7 w-4 -translate-y-1/2 items-center justify-center rounded-full text-white/30 transition hover:bg-white/[0.08] hover:text-fuchsia-300"
+          >
+            <ChevronRight size={13} />
+          </button>
+        </>
+      )}
+
+      {/* Header */}
       <div className="flex w-full items-center justify-between gap-2">
-        <div className="relative flex shrink-0 rounded-full bg-white/[0.06] p-1 ring-1 ring-white/[0.08]">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              onDragEnter={() => {
-                if (id === 'home' || id === 'stash') setTab(id);
-              }}
-              className="relative z-10 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-white/75 transition-colors hover:text-white"
-            >
-              {tab === id && !hasFormPreview && (
-                <motion.span
-                  layoutId="tab-pill"
-                  className="absolute inset-0 -z-10 rounded-full bg-white/[0.16] shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]"
-                  transition={{ type: 'spring', stiffness: 440, damping: 34 }}
-                />
-              )}
-              <Icon size={12} className={id === 'gemini' ? 'text-indigo-300' : ''} />
-              {label}
-              {id === 'stash' && stashItems.length > 0 && (
-                <span className="rounded-full bg-sky-500 px-1.5 text-[9px] leading-4 text-white">{stashItems.length}</span>
-              )}
-              {id === 'media' && media.status === 'Playing' && (
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              )}
-              {id === 'clock' && (clock?.ringing || clock?.timer?.running || clock?.stopwatch?.running) && (
-                <span className="rounded-full bg-amber-400/25 px-1.5 text-[9px] font-semibold tabular-nums text-amber-300">
-                  {clock?.timer?.running ? formatMinSec(clock.timer.left) : '●'}
-                </span>
-              )}
-            </button>
-          ))}
-          {hasFormPreview && (
-            <div className="flex items-center gap-1 rounded-full bg-emerald-400/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-400/35">
-              <FileCheck2 size={12} />
-              Form Preview
-            </div>
-          )}
+        <div className="flex items-center gap-1.5">
+          {/* Nusa 1.1 x Cyberpunk Mascot Cat Badge */}
+          <CyberCatBadge
+            jarvisStatus={jarvis?.status}
+            onClick={(e) => {
+              e.stopPropagation();
+              setTab('gemini');
+            }}
+          />
+
+          {/* Top Navigation Bar */}
+          <div className="relative flex shrink-0 rounded-full bg-white/[0.05] p-0.5 ring-1 ring-cyan-400/20">
+            {TABS.map(({ id, label, icon: Icon, accent }) => {
+              const active = tab === id && !hasFormPreview;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTab(id)}
+                  onDragEnter={() => {
+                    if (id === 'home' || id === 'stash') setTab(id);
+                  }}
+                  className={`relative z-10 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                    active ? 'text-white' : 'text-white/65 hover:text-white'
+                  }`}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="tab-pill"
+                      className="absolute inset-0 -z-10 rounded-full bg-gradient-to-r from-cyan-500/30 via-indigo-500/30 to-fuchsia-500/30 ring-1 ring-cyan-400/50 shadow-[0_0_14px_rgba(0,240,255,0.28)]"
+                      transition={{ type: 'spring', stiffness: 440, damping: 34 }}
+                    />
+                  )}
+                  <Icon size={11.5} className={active ? accent : ''} />
+                  {label}
+                  {id === 'stash' && stashItems.length > 0 && (
+                    <span className="rounded-full bg-fuchsia-500 px-1.5 font-mono text-[9px] leading-4 text-white shadow-[0_0_8px_rgba(217,70,239,0.6)]">
+                      {stashItems.length}
+                    </span>
+                  )}
+                  {id === 'media' && media.status === 'Playing' && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#00f0ff]" />
+                  )}
+                  {id === 'clock' && (clock?.ringing || clock?.timer?.running || clock?.stopwatch?.running) && (
+                    <span className="rounded-full bg-amber-400/25 px-1.5 font-mono text-[9px] font-semibold tabular-nums text-amber-300">
+                      {clock?.timer?.running ? formatMinSec(clock.timer.left) : '●'}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+            {hasFormPreview && (
+              <div className="flex items-center gap-1 rounded-full bg-emerald-400/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 ring-1 ring-emerald-400/40">
+                <FileCheck2 size={12} />
+                Form Preview
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex min-w-0 shrink-0 items-center gap-1.5">
@@ -91,10 +153,13 @@ export default function ExpandedView({
             )}
           </AnimatePresence>
 
-          {/* Live system status pill (Suhu, Baterai Laptop, Network Speed, Bluetooth) */}
-          <div className="flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-[10px] font-medium text-white/80 ring-1 ring-white/[0.07]">
+          {/* Nusa 1.1 Inline Hover Volume Slider ("Volume, right in the notch") */}
+          <HoverVolumeSlider sysinfo={sysinfo} compact />
+
+          {/* Cyberpunk HUD System Telemetry Pill */}
+          <div className="flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 font-mono text-[10px] font-semibold text-white/85 ring-1 ring-white/[0.08]">
             <span className="flex items-center gap-0.5 tabular-nums" title={`Suhu ~${temp ?? '--'}°C (CPU ${sysinfo?.cpu ?? '--'}%)`}>
-              <Thermometer size={11} className={temp >= 75 ? 'text-rose-400' : temp >= 62 ? 'text-amber-300' : 'text-emerald-400'} />
+              <Thermometer size={11} className={temp >= 75 ? 'text-rose-400' : temp >= 62 ? 'text-amber-300' : 'text-cyan-400'} />
               {temp != null ? `${temp}°C` : '--°C'}
             </span>
             {battery && (
@@ -102,7 +167,7 @@ export default function ExpandedView({
                 {battery.charging ? (
                   <BatteryCharging size={11} className="text-emerald-400" />
                 ) : (
-                  <Battery size={11} className={battery.level <= 20 ? 'text-rose-400' : 'text-sky-300'} />
+                  <Battery size={11} className={battery.level <= 20 ? 'text-rose-400' : 'text-fuchsia-300'} />
                 )}
                 {battery.level}%
               </span>
@@ -120,8 +185,8 @@ export default function ExpandedView({
             >
               {primaryBt ? (
                 <>
-                  <Headphones size={10.5} className="text-indigo-400" />
-                  <span className="text-indigo-300">{primaryBt.battery}%</span>
+                  <Headphones size={10.5} className="text-fuchsia-400" />
+                  <span className="text-fuchsia-300">{primaryBt.battery}%</span>
                 </>
               ) : (
                 <Bluetooth size={10.5} className="text-white/30" />
@@ -130,10 +195,10 @@ export default function ExpandedView({
           </div>
 
           <div className="shrink-0 text-right leading-tight">
-            <div className="font-display text-[12.5px] font-semibold tabular-nums">
+            <div className="font-mono text-[12px] font-bold tabular-nums text-cyan-100">
               {now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div className="text-[9px] text-white/45">
+            <div className="font-mono text-[8.5px] uppercase tracking-wider text-fuchsia-300/60">
               {now.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })}
             </div>
           </div>
@@ -154,12 +219,12 @@ export default function ExpandedView({
             }
             className={`grid h-7 w-7 shrink-0 place-items-center rounded-full transition-all ${
               isListening
-                ? 'bg-rose-500 text-white shadow-[0_0_16px_rgba(244,63,94,0.7)] animate-pulse'
+                ? 'bg-rose-500 text-white shadow-[0_0_16px_rgba(244,63,94,0.8)] animate-pulse'
                 : isProcessing
-                  ? 'bg-indigo-500/30 text-indigo-300'
+                  ? 'bg-indigo-500/30 text-indigo-300 ring-1 ring-indigo-400/40'
                   : isSpeaking
-                    ? 'bg-cyan-400 text-black shadow-[0_0_14px_rgba(34,211,238,0.55)]'
-                    : 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-400/30 hover:bg-cyan-500/25 hover:text-white'
+                    ? 'bg-cyan-400 text-black shadow-[0_0_16px_rgba(0,240,255,0.75)]'
+                    : 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-400/35 hover:bg-cyan-500/25 hover:text-white'
             }`}
           >
             {isProcessing ? (
@@ -183,7 +248,7 @@ export default function ExpandedView({
             title={pinned ? 'Ter-pin (tetap terbuka saat kerja) — klik untuk lepas pin' : 'Pin Dynamic Island agar tetap terbuka'}
             className={`grid h-7 w-7 shrink-0 place-items-center rounded-full transition-all ${
               pinned
-                ? 'bg-emerald-400 text-black shadow-[0_0_12px_rgba(52,211,153,0.45)]'
+                ? 'bg-cyan-400 text-black shadow-[0_0_14px_rgba(0,240,255,0.6)]'
                 : 'bg-white/[0.08] text-white/55 hover:bg-white/15 hover:text-white'
             }`}
           >
@@ -194,18 +259,18 @@ export default function ExpandedView({
 
       {/* Global Jarvis Voice Feedback Pill (when using voice on non-Gemini tabs) */}
       {tab !== 'gemini' && (isListening || isProcessing || isSpeaking) && (
-        <div className="mt-2 flex items-center justify-between rounded-xl bg-gradient-to-r from-cyan-500/20 via-indigo-500/20 to-purple-500/20 px-3 py-1 text-[11px] ring-1 ring-cyan-400/35">
+        <div className="mt-1.5 flex items-center justify-between rounded-xl bg-gradient-to-r from-cyan-500/20 via-indigo-500/20 to-fuchsia-500/20 px-3 py-1 text-[11px] ring-1 ring-cyan-400/45 shadow-[0_0_16px_rgba(0,240,255,0.18)]">
           <div className="flex min-w-0 flex-1 items-center gap-2 truncate text-cyan-200">
             <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-400 animate-ping" />
             {isListening && (
               <span className="truncate">
-                <b>Jarvis mendengar:</b> Ucapkan perintah (mis: <i>&quot;Isi Google Form ini&quot;</i>, <i>&quot;Benerin error di App.jsx&quot;</i>, <i>&quot;Pindah ke tab YouTube&quot;</i>)
+                <b>JARVIS // LISTENING:</b> Ucapkan perintah (mis: <i>&quot;Isi Google Form ini&quot;</i>, <i>&quot;Benerin error di App.jsx&quot;</i>, <i>&quot;Pindah ke tab YouTube&quot;</i>)
               </span>
             )}
-            {isProcessing && <span><b>Jarvis:</b> Memproses perintahmu…</span>}
+            {isProcessing && <span><b>JARVIS // PROCESSING:</b> Memproses perintahmu…</span>}
             {isSpeaking && (
               <span className="truncate">
-                <b>Jarvis:</b> {jarvis.lastReply || 'Berbicara…'}
+                <b>JARVIS:</b> {jarvis.lastReply || 'Berbicara…'}
               </span>
             )}
           </div>
@@ -219,8 +284,8 @@ export default function ExpandedView({
         </div>
       )}
 
-      {/* body */}
-      <div className="relative mt-3 flex-1">
+      {/* Main Tab Body */}
+      <div className="relative mt-2.5 flex-1">
         <AnimatePresence mode="wait" initial={false}>
           {hasFormPreview ? (
             <motion.div
@@ -276,6 +341,58 @@ export default function ExpandedView({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Nusa 1.1 Bottom "Every page, one hover away — Hover the dots, pick a page" (00:18 in video) */}
+      {!hasFormPreview && (
+        <div
+          onMouseEnter={() => setBottomDockHover(true)}
+          onMouseLeave={() => setBottomDockHover(false)}
+          className="mt-1.5 flex h-5 items-center justify-center"
+        >
+          <motion.div
+            layout
+            transition={{ type: 'spring', stiffness: 460, damping: 32 }}
+            className={`flex items-center justify-center rounded-full transition-colors ${
+              bottomDockHover
+                ? 'gap-1.5 bg-white/[0.08] px-2.5 py-0.5 ring-1 ring-cyan-400/35 shadow-[0_0_16px_rgba(0,240,255,0.22)]'
+                : 'gap-1.5 px-2 py-0.5'
+            }`}
+          >
+            {TABS.map(({ id, label, icon: Icon, accent }) => {
+              const active = tab === id;
+              return bottomDockHover ? (
+                <button
+                  key={id}
+                  type="button"
+                  onMouseEnter={() => setTab(id)}
+                  onClick={() => setTab(id)}
+                  title={label}
+                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-all ${
+                    active
+                      ? 'bg-gradient-to-r from-cyan-500/35 to-fuchsia-500/35 text-white ring-1 ring-cyan-400/50 shadow-[0_0_10px_rgba(0,240,255,0.35)]'
+                      : 'text-white/55 hover:text-white'
+                  }`}
+                >
+                  <Icon size={11} className={active ? accent : ''} />
+                  <span>{label}</span>
+                </button>
+              ) : (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTab(id)}
+                  aria-label={label}
+                  className={`rounded-full transition-all duration-200 ${
+                    active
+                      ? 'h-1.5 w-4 bg-gradient-to-r from-cyan-400 to-fuchsia-400 shadow-[0_0_8px_#00f0ff]'
+                      : 'h-1.5 w-1.5 bg-white/30 hover:bg-white/60'
+                  }`}
+                />
+              );
+            })}
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
