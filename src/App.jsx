@@ -245,26 +245,26 @@ export default function App() {
   }, [activeClock, activeAutomation]);
 
   const musicPlaying = !!(media?.active && media?.status === 'Playing');
-  const currentLyric = musicPlaying && lyrics?.currentLine ? String(lyrics.currentLine).trim() : null;
-  const liveLyricOrTitle = musicPlaying
-    ? (currentLyric || (media?.title ? `${media.title}${media.artist ? ` · ${media.artist}` : ''}` : null))
+  const spotifyPlaying = !!(musicPlaying && media?.isSpotify);
+  const currentLyric = spotifyPlaying && lyrics?.status === 'ok' && lyrics?.currentLine
+    ? String(lyrics.currentLine).trim()
     : null;
-  const musicPlayingRef = useRef(musicPlaying);
+  const hasActiveLyricRef = useRef(false);
   useEffect(() => {
-    musicPlayingRef.current = musicPlaying;
-  }, [musicPlaying]);
+    hasActiveLyricRef.current = !!currentLyric;
+  }, [currentLyric]);
 
-  const useMinimalBrowserLip = browserActive && !activeAutomation && !musicPlaying;
+  const useMinimalBrowserLip = browserActive && !activeAutomation && !currentLyric;
 
   const dynamicIdleWidth = useMinimalBrowserLip
     ? 106
-    : liveLyricOrTitle
-      ? Math.min(440, Math.max(196, Math.round(liveLyricOrTitle.length * 6.8 + 66)))
+    : currentLyric
+      ? Math.min(440, Math.max(185, Math.round(currentLyric.length * 6.8 + 64)))
       : 112;
 
   const dynamicIdleHeight = useMinimalBrowserLip
     ? 9
-    : liveLyricOrTitle
+    : currentLyric
       ? 26
       : 22;
 
@@ -385,7 +385,7 @@ export default function App() {
     const id = setInterval(() => {
       if (
         browserActiveRef.current
-        || musicPlayingRef.current
+        || hasActiveLyricRef.current
         || hovered.current
         || pinnedRef.current
         || jarvisBusyRef.current

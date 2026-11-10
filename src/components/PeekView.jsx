@@ -35,12 +35,10 @@ export function HiddenLipView({
   lyricIndex = -1,
   minimalLip = false,
 }) {
-  const liveLyricOrTitle = mediaPlaying
-    ? (currentLyric || (media?.title ? `${media.title}${media.artist ? ` · ${media.artist}` : ''}` : null))
-    : null;
+  const showLyric = !!(mediaPlaying && currentLyric);
 
-  // When browser/Google is active AND no music is playing, render the ultra-slim micro-notch from Image 4
-  if (minimalLip && !liveLyricOrTitle) {
+  // When browser/Google is active AND no song lyric is active, render the ultra-slim micro-notch
+  if (minimalLip && !showLyric) {
     return (
       <div className="flex h-full w-full items-center justify-center gap-1.5 px-2">
         {timerRunning && <span className="h-1 w-1 rounded-full bg-amber-400 animate-pulse" />}
@@ -51,7 +49,7 @@ export function HiddenLipView({
 
   return (
     <div className="relative flex h-full w-full items-center justify-between gap-2 overflow-hidden px-2.5">
-      {liveLyricOrTitle ? (
+      {showLyric ? (
         <>
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
             {media?.thumb ? (
@@ -66,14 +64,14 @@ export function HiddenLipView({
             <div className="relative flex-1 overflow-hidden">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
-                  key={`${lyricIndex}-${liveLyricOrTitle}`}
+                  key={`${lyricIndex}-${currentLyric}`}
                   initial={{ opacity: 0, y: 7, filter: 'blur(2px)' }}
                   animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                   exit={{ opacity: 0, y: -7, filter: 'blur(2px)' }}
                   transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                   className="truncate text-[11.5px] font-semibold tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
                 >
-                  {liveLyricOrTitle}
+                  {currentLyric}
                 </motion.div>
               </AnimatePresence>
             </div>

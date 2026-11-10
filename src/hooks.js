@@ -144,12 +144,13 @@ export function useMediaPosition(media) {
   return pos;
 }
 
-/** Fetches synced LRC lyrics for the current track and computes the active line index 1-by-1. */
+/** Fetches synced LRC lyrics for the current Spotify track and computes the active line index 1-by-1. */
 export function useLyrics(media, position = 0) {
   const [data, setData] = useState({ status: 'idle', synced: false, lines: [], duration: 0 });
-  const title = media?.active ? media.title : '';
-  const artist = media?.active ? media.artist : '';
-  const duration = media?.active ? media.duration : 0;
+  const isSpotifyTrack = !!(media?.active && media?.isSpotify);
+  const title = isSpotifyTrack ? media.title : '';
+  const artist = isSpotifyTrack ? media.artist : '';
+  const duration = isSpotifyTrack ? media.duration : 0;
 
   useEffect(() => {
     let cancelled = false;
