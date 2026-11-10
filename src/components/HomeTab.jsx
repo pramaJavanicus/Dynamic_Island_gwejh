@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, HardDrive, CalendarDays, Mail, Calculator, Download, FileText, Monitor, Code2, Folder,
-  Image, Music, Video, Settings2, ArrowRight, Plus, X, AppWindow, Volume2, Volume1, VolumeX, Check,
+  Image, Music, Video, Settings2, ArrowRight, Plus, X, AppWindow, Check,
 } from 'lucide-react';
+import { AppleStatusRings } from './CyberMascot.jsx';
 
 const api = window.island;
 
-const QUICK_APPS = [
-  { name: 'Drive', action: () => api.openUrl('https://drive.google.com'), icon: HardDrive, color: 'from-yellow-400 via-green-500 to-blue-500' },
-  { name: 'Calendar', action: () => api.openUrl('https://calendar.google.com'), icon: CalendarDays, color: 'from-blue-500 to-blue-600' },
-  { name: 'Gmail', action: () => api.openUrl('https://mail.google.com'), icon: Mail, color: 'from-red-500 to-rose-600' },
-  { name: 'Kalkulator', action: () => api.openCalc(), icon: Calculator, color: 'from-amber-400 to-orange-500' },
+const DEFAULT_ROWS = [
+  { name: 'Gmail', sub: 'Buka kotak masuk email', action: () => api.openUrl('https://mail.google.com'), icon: Mail, bg: 'bg-blue-500' },
+  { name: 'Calendar', sub: 'Jadwal & agenda hari ini', action: () => api.openUrl('https://calendar.google.com'), icon: CalendarDays, bg: 'bg-amber-500' },
+  { name: 'Google Drive', sub: 'Penyimpanan cloud & dokumen', action: () => api.openUrl('https://drive.google.com'), icon: HardDrive, bg: 'bg-emerald-500' },
+  { name: 'Kalkulator', sub: 'Buka aplikasi kalkulator', action: () => api.openCalc(), icon: Calculator, bg: 'bg-indigo-500' },
 ];
 
 const FOLDER_ICONS = {
@@ -34,6 +35,25 @@ function evalMathExpression(raw) {
   return null;
 }
 
+function getCurrentWeekDays() {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sun, 1 = Mon ...
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday);
+  const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  return labels.map((lbl, idx) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + idx);
+    return {
+      key: idx,
+      label: lbl,
+      dateNum: d.getDate(),
+      isToday: d.toDateString() === now.toDateString(),
+    };
+  });
+}
+
 export default function HomeTab({ config, sysinfo, dragOver, focusToken, onInputFocus }) {
   const [query, setQuery] = useState('');
   const [copiedCalc, setCopiedCalc] = useState(false);
@@ -44,6 +64,7 @@ export default function HomeTab({ config, sysinfo, dragOver, focusToken, onInput
   }, [focusToken]);
 
   const mathResult = useMemo(() => evalMathExpression(query), [query]);
+  const weekDays = useMemo(() => getCurrentWeekDays(), []);
 
   const submit = (e) => {
     e.preventDefault();
@@ -61,189 +82,170 @@ export default function HomeTab({ config, sysinfo, dragOver, focusToken, onInput
   };
 
   const folders = config?.folders ?? [];
-  const volume = sysinfo?.volume ?? 50;
-  const muted = !!sysinfo?.muted;
-  const effectiveVol = muted ? 0 : volume;
-  const VolIcon = muted || volume === 0 ? VolumeX : volume < 50 ? Volume1 : Volume2;
-
-  const onVolumeWheel = (e) => {
-    const step = e.deltaY < 0 ? 4 : -4;
-    api.sysinfo.setVolume(Math.max(0, Math.min(100, volume + step)));
-  };
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      {/* Google search + Instant Calculator */}
-      <form onSubmit={submit} className="group flex items-center gap-2 rounded-2xl bg-white/[0.08] px-3 py-2.5 ring-1 ring-white/5 focus-within:ring-white/25">
-        <Search size={16} className="text-white/50" />
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => { onInputFocus(true); api.focus(); }}
-          onBlur={() => onInputFocus(false)}
-          placeholder="Cari di Google atau hitung angka (mis: 250 * 14)…"
-          spellCheck={false}
-          className="flex-1 bg-transparent text-[13.5px] text-white outline-none placeholder:text-white/35"
-        />
-        {mathResult !== null && (
+    <div className="flex h-full gap-3.5">
+      {/* Left Column: Search + Stacked Today Cards (Image 1 & Image 3 style) */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        {/* Compact Search / Calculator Bar */}
+        <form
+          onSubmit={submit}
+          className="flex items-center gap-2 rounded-xl bg-white/[0.06] px-2.5 py-1.5 ring-1 ring-white/[0.06] focus-within:ring-white/20"
+        >
+          <Search size={13.5} className="shrink-0 text-white/45" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => { onInputFocus(true); api.focus(); }}
+            onBlur={() => onInputFocus(false)}
+            placeholder="Cari di Google atau hitung angka…"
+            spellCheck={false}
+            className="flex-1 bg-transparent text-[12px] text-white outline-none placeholder:text-white/35"
+          />
+          {mathResult !== null && (
+            <button
+              type="submit"
+              className="flex items-center gap-1 rounded-full bg-amber-400/20 px-2 py-0.5 text-[10.5px] font-semibold tabular-nums text-amber-300"
+            >
+              {copiedCalc ? <Check size={11} className="text-emerald-400" /> : `= ${mathResult.toLocaleString('id-ID')}`}
+            </button>
+          )}
+          {query && (
+            <button type="submit" className="grid h-5 w-5 place-items-center rounded-full bg-white text-black">
+              <ArrowRight size={11} />
+            </button>
+          )}
           <button
-            type="submit"
-            title="Klik atau tekan Enter untuk menyalin hasil"
-            className="flex items-center gap-1 rounded-full bg-amber-400/20 px-2.5 py-0.5 text-[12px] font-semibold tabular-nums text-amber-300 hover:bg-amber-400/30"
+            type="button"
+            onClick={() => api.shortcuts.pick()}
+            title="Tambah aplikasi/folder ke daftar"
+            className="text-white/40 transition hover:text-white"
           >
-            {copiedCalc ? <Check size={12} className="text-emerald-400" /> : `= ${mathResult.toLocaleString('id-ID')}`}
+            <Plus size={13} />
           </button>
-        )}
-        {query && (
-          <button type="submit" className="grid h-6 w-6 place-items-center rounded-full bg-white text-black">
-            <ArrowRight size={14} />
+          <button
+            type="button"
+            onClick={() => api.config.open()}
+            title="Pengaturan (config.json)"
+            className="text-white/35 transition hover:text-white"
+          >
+            <Settings2 size={12} />
           </button>
-        )}
-      </form>
+        </form>
 
-      <div className="flex min-h-0 flex-1 gap-3">
-        {/* Left: Google apps + Calculator + Quick Volume Slider */}
-        <div className="flex w-[206px] shrink-0 flex-col justify-between">
-          <div className="flex flex-col gap-1.5">
-            <span className="px-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
-              Google & Tools
-            </span>
-            <div className="grid grid-cols-4 gap-1.5">
-              {QUICK_APPS.map(({ name, action, icon: Icon, color }) => (
+        {/* Stacked Notification-Style Shortcut Rows (exact Image 1 & 3 aesthetic) */}
+        <div
+          className={`no-scrollbar flex flex-1 flex-col gap-1.5 overflow-y-auto rounded-xl transition-colors ${
+            dragOver ? 'border border-dashed border-cyan-400 bg-cyan-500/10 p-2' : ''
+          }`}
+        >
+          {dragOver ? (
+            <div className="pointer-events-none flex h-full items-center justify-center gap-1.5 text-[11.5px] font-medium text-cyan-300">
+              <Plus size={16} /> Lepaskan untuk simpan ke Today
+            </div>
+          ) : (
+            <>
+              {DEFAULT_ROWS.slice(0, 3).map(({ name, sub, action, icon: Icon, bg }) => (
                 <button
                   key={name}
                   type="button"
                   onClick={action}
-                  title={`Buka ${name}`}
-                  className="flex flex-col items-center gap-1.5 rounded-2xl py-1.5 transition hover:bg-white/[0.08] active:scale-95"
+                  className="group flex w-full items-center justify-between gap-2.5 rounded-xl bg-white/[0.06] px-2.5 py-1.5 text-left transition hover:bg-white/[0.11] active:scale-[0.99]"
                 >
-                  <span className={`grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br ${color} shadow-lg`}>
-                    <Icon size={18} />
-                  </span>
-                  <span className="truncate text-[10px] text-white/75">{name}</span>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${bg} text-white shadow-sm`}>
+                      <Icon size={14} />
+                    </span>
+                    <div className="min-w-0 leading-tight">
+                      <div className="truncate text-[12px] font-bold text-white">{name}</div>
+                      <div className="truncate text-[10.5px] text-white/50">{sub}</div>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-[10px] text-white/35 group-hover:text-white/65">Open</span>
                 </button>
               ))}
-            </div>
-          </div>
 
-          {/* Quick Volume & Mute Card */}
-          <div
-            onWheel={onVolumeWheel}
-            title="Geser atau scroll untuk atur volume • Klik ikon untuk Mute"
-            className="flex flex-col gap-1.5 rounded-2xl bg-white/[0.05] px-3 py-2 ring-1 ring-white/[0.06]"
-          >
-            <div className="flex items-center justify-between text-[10.5px]">
-              <span className="font-semibold uppercase tracking-wider text-white/45">Volume</span>
-              <span className="font-semibold tabular-nums text-white/80">
-                {muted ? 'Mute' : `${volume}%`}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => api.sysinfo.toggleMute()}
-                className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg transition-colors ${
-                  muted ? 'bg-rose-500/20 text-rose-400' : 'bg-white/[0.08] text-white/80 hover:bg-white/15 hover:text-white'
+              {folders.map((f) => {
+                const Icon = FOLDER_ICONS[f.icon] ?? Folder;
+                return (
+                  <div
+                    key={f.name + f.path}
+                    onClick={() => api.openFolder(f.path)}
+                    className="group relative flex w-full cursor-pointer items-center justify-between gap-2.5 rounded-xl bg-white/[0.06] px-2.5 py-1.5 text-left transition hover:bg-white/[0.11]"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/10 text-cyan-300">
+                        {f.iconData ? (
+                          <img src={f.iconData} alt="" className="h-4 w-4 object-contain" />
+                        ) : (
+                          <Icon size={14} />
+                        )}
+                      </span>
+                      <div className="min-w-0 leading-tight">
+                        <div className="truncate text-[12px] font-bold text-white">{f.name}</div>
+                        <div className="truncate text-[10px] text-white/45">{f.path}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        api.shortcuts.remove(f.path);
+                      }}
+                      title="Hapus shortcut"
+                      className="hidden h-4 w-4 place-items-center rounded-full bg-white/15 text-white/75 hover:bg-rose-500 hover:text-white group-hover:grid"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Right Column: 7-Day Week Strip + Apple Circular Rings Card (Image 1 & 3 style) */}
+      <div className="flex w-[205px] shrink-0 flex-col justify-between gap-2">
+        {/* 7-Day Week Calendar Strip (M T W T F S S) */}
+        <div className="grid grid-cols-7 gap-1 px-1 pt-0.5 text-center">
+          {weekDays.map((d) => (
+            <div key={d.key} className="flex flex-col items-center gap-1">
+              <span className="text-[9.5px] font-semibold text-white/40">{d.label}</span>
+              <span
+                className={`grid h-6 w-6 place-items-center rounded-full text-[11.5px] font-bold tabular-nums transition ${
+                  d.isToday
+                    ? 'bg-blue-500 text-white shadow-[0_0_12px_rgba(59,130,246,0.75)]'
+                    : 'text-white/75'
                 }`}
               >
-                <VolIcon size={13.5} />
-              </button>
-              <div className="relative flex flex-1 items-center py-1">
-                <div className="pointer-events-none h-1.5 w-full overflow-hidden rounded-full bg-white/15">
-                  <div
-                    className={`h-full rounded-full transition-[width] duration-75 ${
-                      muted ? 'bg-rose-400/60' : 'bg-sky-400'
-                    }`}
-                    style={{ width: `${effectiveVol}%` }}
-                  />
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={effectiveVol}
-                  onChange={(e) => api.sysinfo.setVolume(Number(e.target.value))}
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                />
-              </div>
+                {d.dateNum}
+              </span>
             </div>
-          </div>
+          ))}
         </div>
 
-        <div className="w-px bg-white/10" />
-
-        {/* Folder & Application shortcuts (supports Drag & Drop to save permanently) */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
-              Shortcut
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => api.shortcuts.pick()}
-                title="Pilih aplikasi (.exe) atau file untuk ditambahkan ke Shortcut"
-                className="flex items-center gap-0.5 rounded-full bg-white/[0.08] px-2 py-0.5 text-[10px] font-medium text-white/75 hover:bg-white/15 hover:text-white"
-              >
-                <Plus size={11} /> Tambah
-              </button>
-              <button
-                type="button"
-                onClick={() => api.config.open()}
-                title="Edit daftar shortcut (config.json)"
-                className="text-white/40 hover:text-white"
-              >
-                <Settings2 size={12} />
-              </button>
+        {/* Apple-Style Status Rings Card + CPU Telemetry */}
+        <div className="flex flex-col gap-2 rounded-2xl bg-white/[0.06] px-3 py-2.5 ring-1 ring-white/[0.05]">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+              <span className="text-[11.5px] font-bold text-white">System Rings</span>
             </div>
+            <span className="font-mono text-[10px] text-white/50">
+              {sysinfo?.temp != null ? `${sysinfo.temp}°C` : 'Ready'}
+            </span>
           </div>
 
-          <div
-            className={`relative flex-1 overflow-hidden rounded-2xl transition-colors ${
-              dragOver
-                ? 'border-2 border-dashed border-emerald-400 bg-emerald-500/10'
-                : 'border border-white/[0.05] bg-white/[0.02]'
-            }`}
-          >
-            {dragOver ? (
-              <div className="pointer-events-none flex h-full flex-col items-center justify-center gap-1.5 text-emerald-300">
-                <Plus size={22} />
-                <span className="text-[11.5px] font-medium">Lepaskan untuk simpan Shortcut permanen</span>
+          <div className="flex items-center justify-between pt-0.5">
+            <AppleStatusRings sysinfo={sysinfo} size={30} />
+            <div className="text-right text-[10px] leading-snug text-white/55">
+              <div>CPU {sysinfo?.cpu ?? 10}%</div>
+              <div className="truncate max-w-[78px]">
+                {sysinfo?.bluetooth?.[0]?.name || 'No BT Audio'}
               </div>
-            ) : (
-              <div className="no-scrollbar grid h-full grid-cols-2 content-start gap-1.5 overflow-y-auto p-1.5">
-                {folders.map((f) => {
-                  const Icon = FOLDER_ICONS[f.icon] ?? Folder;
-                  return (
-                    <div
-                      key={f.name + f.path}
-                      onClick={() => api.openFolder(f.path)}
-                      title={`${f.name}\n${f.path}`}
-                      className="group relative flex cursor-pointer items-center gap-2 rounded-xl bg-white/[0.06] px-2.5 py-2 text-left text-[12px] transition hover:bg-white/[0.13] active:scale-[.97]"
-                    >
-                      {f.iconData ? (
-                        <img src={f.iconData} alt="" className="h-4 w-4 shrink-0 object-contain" />
-                      ) : (
-                        <Icon size={14} className={`shrink-0 ${f.kind === 'app' ? 'text-sky-300' : 'text-amber-300'}`} />
-                      )}
-                      <span className="truncate pr-3">{f.name}</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          api.shortcuts.remove(f.path);
-                        }}
-                        title="Hapus shortcut"
-                        className="absolute right-1.5 top-1/2 hidden h-4 w-4 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white/80 hover:bg-rose-500 hover:text-white group-hover:grid"
-                      >
-                        <X size={10} strokeWidth={2.5} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </div>

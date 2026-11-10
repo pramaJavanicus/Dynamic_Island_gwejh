@@ -19,7 +19,7 @@ function playBtConnectChime() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
-    const notes = [587.33, 880.0]; // D5 -> A5 (clean AirPods-like connect tone)
+    const notes = [587.33, 880.0]; // D5 -> A5
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -46,24 +46,24 @@ const SPRING = {
   restDelta: 0.25,
 };
 
-// Flush top-edge notch geometry (y: 0, top radii: 0, sculpted bottom radii)
+// Compact, sleek Expanded Notch (matching Images 1, 2, 3 — not overly large!)
 const EXPANDED = {
-  width: 740,
-  height: 348,
+  width: 550,
+  height: 224,
   borderTopLeftRadius: 0,
   borderTopRightRadius: 0,
-  borderBottomLeftRadius: 34,
-  borderBottomRightRadius: 34,
+  borderBottomLeftRadius: 30,
+  borderBottomRightRadius: 30,
   y: 0,
 };
 
 const EXPANDED_PREVIEW = {
-  width: 740,
-  height: 416,
+  width: 620,
+  height: 340,
   borderTopLeftRadius: 0,
   borderTopRightRadius: 0,
-  borderBottomLeftRadius: 34,
-  borderBottomRightRadius: 34,
+  borderBottomLeftRadius: 32,
+  borderBottomRightRadius: 32,
   y: 0,
 };
 
@@ -78,7 +78,7 @@ export default function App() {
   const automation = useAutomation();
 
   // mode: 'hidden' | 'peek' | 'compact' | 'bt-toast' | 'auto-toast' | 'expanded'
-  const [mode, setMode] = useState('peek');
+  const [mode, setMode] = useState('hidden');
   const [pinned, setPinned] = useState(false);
   const [tab, setTab] = useState('home');
   const [dragOver, setDragOver] = useState(false);
@@ -96,6 +96,16 @@ export default function App() {
   const pinnedRef = useRef(false);
   const modeRef = useRef(mode);
   const hasPreviewRef = useRef(false);
+  const browserActive = !!sysinfo?.browserActive;
+  const browserActiveRef = useRef(browserActive);
+
+  useEffect(() => {
+    browserActiveRef.current = browserActive;
+    // When user opens Browser / Google, immediately collapse peek to the slim Image 4 mini-notch
+    if (browserActive && modeRef.current === 'peek' && !hovered.current && !pinnedRef.current && !automation.status?.active) {
+      setMode('hidden');
+    }
+  }, [browserActive, automation.status]);
 
   useEffect(() => {
     pinnedRef.current = pinned;
@@ -164,7 +174,7 @@ export default function App() {
   // Show Automation Toast pill when a code/form/browser toast arrives while not expanded
   useEffect(() => {
     if (!automation.toast) {
-      setMode((m) => (m === 'auto-toast' ? 'peek' : m));
+      setMode((m) => (m === 'auto-toast' ? 'hidden' : m));
       return;
     }
     if (modeRef.current !== 'expanded') {
@@ -215,7 +225,7 @@ export default function App() {
       clearTimeout(btTimerRef.current);
       btTimerRef.current = setTimeout(() => {
         setBtAlert(null);
-        setMode((m) => (m === 'bt-toast' ? (activeClockRef.current ? 'peek' : 'hidden') : m));
+        setMode((m) => (m === 'bt-toast' ? 'hidden' : m));
       }, 4500);
     }
   }, [sysinfo?.bluetooth, sysinfo?.ts, jarvis]);
@@ -225,7 +235,7 @@ export default function App() {
   const activeClockRef = useRef(activeClock);
   useEffect(() => {
     activeClockRef.current = activeClock || activeAutomation;
-    if ((activeClock || activeAutomation) && modeRef.current === 'hidden') {
+    if ((activeClock || activeAutomation) && modeRef.current === 'hidden' && !browserActiveRef.current) {
       setMode('peek');
     } else if (!activeClock && !activeAutomation && modeRef.current === 'peek' && !hovered.current && !pinnedRef.current) {
       clearTimeout(peekTimer.current);
@@ -238,20 +248,28 @@ export default function App() {
   const musicPlaying = !!(media?.active && media?.status === 'Playing');
   const currentLyric = musicPlaying && lyrics?.currentLine ? String(lyrics.currentLine).trim() : null;
 
-  // Dynamic lyrics width (Nusa 1.1 "Dynamic lyrics — The notch fits every line")
-  const dynamicIdleWidth = currentLyric
-    ? Math.min(520, Math.max(180, Math.round(currentLyric.length * 6.8 + 56)))
-    : musicPlaying
-      ? 148
-      : 126;
+  // Image 4 Minimal Notch when browser/Google is active (or idle without synced lyrics)
+  const useMinimalBrowserLip = browserActive && !activeAutomation;
 
-  const compactWidth = media.active ? 360 : stashItems.length ? 286 : 254;
+  const dynamicIdleWidth = useMinimalBrowserLip
+    ? 106
+    : currentLyric
+      ? Math.min(440, Math.max(170, Math.round(currentLyric.length * 6.5 + 52)))
+      : 112;
+
+  const dynamicIdleHeight = useMinimalBrowserLip
+    ? 9
+    : currentLyric
+      ? 24
+      : 22;
+
+  const compactWidth = media.active ? 320 : stashItems.length ? 250 : 220;
   const peekWidth = Math.min(
-    650,
-    (sysinfo?.bluetooth?.length ? 390 : 325)
-      + (activeClock ? 72 : 0)
+    460,
+    210
+      + (activeClock ? 68 : 0)
       + (musicPlaying ? 115 : 0)
-      + (activeAutomation ? 165 : 0),
+      + (activeAutomation ? 140 : 0),
   );
 
   const expandedBox = automation.formPreview ? EXPANDED_PREVIEW : EXPANDED;
@@ -262,53 +280,53 @@ export default function App() {
         return expandedBox;
       case 'auto-toast':
         return {
-          width: 430,
-          height: 58,
+          width: 400,
+          height: 54,
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
-          borderBottomLeftRadius: 24,
-          borderBottomRightRadius: 24,
+          borderBottomLeftRadius: 22,
+          borderBottomRightRadius: 22,
           y: 0,
         };
       case 'bt-toast':
         return {
-          width: 390,
-          height: 54,
+          width: 360,
+          height: 50,
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
-          borderBottomLeftRadius: 24,
-          borderBottomRightRadius: 24,
+          borderBottomLeftRadius: 22,
+          borderBottomRightRadius: 22,
           y: 0,
         };
       case 'compact':
         return {
           width: compactWidth,
-          height: 36,
+          height: 32,
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
-          borderBottomLeftRadius: 18,
-          borderBottomRightRadius: 18,
+          borderBottomLeftRadius: 16,
+          borderBottomRightRadius: 16,
           y: 0,
         };
       case 'peek':
         return {
           width: peekWidth,
-          height: 34,
+          height: 30,
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
-          borderBottomLeftRadius: 18,
-          borderBottomRightRadius: 18,
+          borderBottomLeftRadius: 16,
+          borderBottomRightRadius: 16,
           y: 0,
         };
       case 'hidden':
       default:
         return {
           width: dynamicIdleWidth,
-          height: 28,
+          height: dynamicIdleHeight,
           borderTopLeftRadius: 0,
           borderTopRightRadius: 0,
-          borderBottomLeftRadius: 16,
-          borderBottomRightRadius: 16,
+          borderBottomLeftRadius: useMinimalBrowserLip ? 7 : 13,
+          borderBottomRightRadius: useMinimalBrowserLip ? 7 : 13,
           y: 0,
         };
     }
@@ -319,7 +337,7 @@ export default function App() {
     clearTimeout(hoverTimer.current);
     clearTimeout(leaveTimer.current);
     clearTimeout(peekTimer.current);
-    setMode(!force && activeClockRef.current ? 'peek' : 'hidden');
+    setMode(!force && activeClockRef.current && !browserActiveRef.current ? 'peek' : 'hidden');
     if (force) {
       setPinned(false);
       pinnedRef.current = false;
@@ -344,7 +362,7 @@ export default function App() {
     }, config?.collapseDelay ?? 380);
   }, [hideToLip, config]);
 
-  // --- Periodic 30-second status peek ---
+  // --- Periodic 30-second status peek (paused when Browser/Google is open so it stays like Image 4) ---
   useEffect(() => {
     if (config?.peekEnabled === false) return undefined;
     const intervalMs = config?.peekInterval ?? 30000;
@@ -360,7 +378,15 @@ export default function App() {
     }
 
     const id = setInterval(() => {
-      if (hovered.current || pinnedRef.current || jarvisBusyRef.current || hasPreviewRef.current || inputFocused.current || dragDepth.current > 0) return;
+      if (
+        browserActiveRef.current
+        || hovered.current
+        || pinnedRef.current
+        || jarvisBusyRef.current
+        || hasPreviewRef.current
+        || inputFocused.current
+        || dragDepth.current > 0
+      ) return;
       setMode((current) => {
         if (current !== 'hidden') return current;
         api.sysinfo.refresh();
@@ -451,7 +477,7 @@ export default function App() {
     dragDepth.current += 1;
     if (dragDepth.current === 1) {
       setDragOver(true);
-      expand(tab === 'media' ? 'home' : undefined);
+      expand(tab === 'media' ? 'stash' : undefined);
     }
   };
   const onDragOver = (e) => {
@@ -502,6 +528,8 @@ export default function App() {
   const isPeek = mode === 'peek';
   const isHidden = mode === 'hidden';
 
+  const earSize = isExpanded ? 14 : (isHidden && useMinimalBrowserLip ? 5 : 10);
+
   return (
     <div
       className="flex h-full w-full justify-center"
@@ -524,12 +552,14 @@ export default function App() {
           willChange: 'width, height, transform',
           backfaceVisibility: 'hidden',
           boxShadow: isExpanded
-            ? `0 22px 54px -10px rgba(0,0,0,.85), 0 6px 32px -6px rgba(${accentRgb}, 0.36), 0 2px 18px -4px rgba(0, 240, 255, 0.28)`
-            : `0 10px 28px -4px rgba(0,0,0,.78), 0 4px 20px -3px rgba(${accentRgb}, 0.42), 0 2px 14px -2px rgba(0, 240, 255, 0.35)`,
+            ? `0 18px 44px -10px rgba(0,0,0,.82), 0 4px 24px -6px rgba(${accentRgb}, 0.25)`
+            : isHidden && useMinimalBrowserLip
+              ? '0 1px 4px rgba(0,0,0,0.45)'
+              : `0 8px 22px -4px rgba(0,0,0,.72), 0 2px 14px -3px rgba(${accentRgb}, 0.28)`,
         }}
       >
-        {/* Nusa 1.1 Concave Top-Edge Shoulder Fillets ("Notch Ears") */}
-        <CyberNotchEars size={isExpanded ? 16 : 12} color="#05060b" />
+        {/* Concave Top-Edge Shoulder Fillets ("Notch Ears" like Image 1, 2, 4) */}
+        <CyberNotchEars size={earSize} color="#030306" />
 
         {/* Inner clipped content container */}
         <div
@@ -539,25 +569,27 @@ export default function App() {
             borderBottomRightRadius: targetBox.borderBottomRightRadius,
           }}
         >
-          {/* Signature Nusa 1.1 x Cyberpunk Neon Bottom Horizon Bar */}
-          <div
-            className={`nusa-bottom-glow pointer-events-none absolute inset-x-3 bottom-0 transition-all duration-300 ${
-              isExpanded ? 'h-[3px] opacity-75' : 'h-[4.5px] opacity-95'
-            }`}
-          />
+          {/* Subtle Nusa x Cyberpunk Bottom Horizon Glow (hidden when in minimal Image 4 browser lip) */}
+          {!(isHidden && useMinimalBrowserLip) && (
+            <div
+              className={`nusa-bottom-glow pointer-events-none absolute inset-x-4 bottom-0 transition-all duration-300 ${
+                isExpanded ? 'h-[2px] opacity-55' : 'h-[3.5px] opacity-85'
+              }`}
+            />
+          )}
 
-          {/* Pre-mounted ExpandedView: zero DOM mount/unmount cost during open/close! */}
+          {/* Pre-mounted ExpandedView */}
           <motion.div
             initial={false}
             animate={
               isExpanded
                 ? { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }
-                : { opacity: 0, scale: 0.94, y: -8, filter: 'blur(4px)' }
+                : { opacity: 0, scale: 0.94, y: -6, filter: 'blur(4px)' }
             }
             transition={
               isExpanded
-                ? { duration: 0.24, delay: 0.02, ease: [0.22, 1, 0.36, 1] }
-                : { duration: 0.14, ease: [0.4, 0, 1, 1] }
+                ? { duration: 0.22, delay: 0.02, ease: [0.22, 1, 0.36, 1] }
+                : { duration: 0.13, ease: [0.4, 0, 1, 1] }
             }
             className="absolute top-0 transform-gpu"
             style={{
@@ -596,7 +628,7 @@ export default function App() {
           <motion.div
             initial={false}
             animate={{ opacity: isCompact ? 1 : 0, scale: isCompact ? 1 : 0.92 }}
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0 transform-gpu"
             style={{ pointerEvents: isCompact ? 'auto' : 'none', willChange: 'transform, opacity' }}
           >
@@ -610,7 +642,7 @@ export default function App() {
             />
           </motion.div>
 
-          {/* Automation Toast (VS Code updated / Form submitted / Browser alert) */}
+          {/* Automation Toast */}
           <motion.div
             initial={false}
             animate={{ opacity: isAutoToast ? 1 : 0, scale: isAutoToast ? 1 : 0.92 }}
@@ -636,7 +668,7 @@ export default function App() {
           <motion.div
             initial={false}
             animate={{ opacity: isPeek ? 1 : 0, scale: isPeek ? 1 : 0.92 }}
-            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0 transform-gpu"
             style={{ pointerEvents: 'none', willChange: 'transform, opacity' }}
           >
@@ -649,7 +681,7 @@ export default function App() {
             />
           </motion.div>
 
-          {/* Idle Cyber-Nusa Mascot / Dynamic Lyrics Notch layer */}
+          {/* Hidden Lip / Mascot / Dynamic Lyrics Notch layer */}
           <motion.div
             initial={false}
             animate={{ opacity: isHidden ? 1 : 0 }}
@@ -660,9 +692,9 @@ export default function App() {
             <HiddenLipView
               mediaPlaying={musicPlaying}
               timerRunning={activeClock}
-              stashCount={stashItems.length}
               jarvisStatus={jarvis.status}
               currentLyric={currentLyric}
+              minimalLip={useMinimalBrowserLip}
             />
           </motion.div>
         </div>

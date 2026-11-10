@@ -50,6 +50,28 @@ public static class SysAudioNet {
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vKey);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    public static bool IsBrowserForeground() {
+        try {
+            IntPtr hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return false;
+            uint pid = 0;
+            GetWindowThreadProcessId(hwnd, out pid);
+            if (pid == 0) return false;
+            var proc = System.Diagnostics.Process.GetProcessById((int)pid);
+            if (proc == null || string.IsNullOrEmpty(proc.ProcessName)) return false;
+            string name = proc.ProcessName.ToLowerInvariant();
+            return name == "chrome" || name == "msedge" || name == "brave" || name == "firefox" || name == "opera" || name == "vivaldi" || name == "arc";
+        } catch {
+            return false;
+        }
+    }
+
     private static bool wasZeroDown = false;
 
     public static bool CheckZeroHotkey() {
@@ -376,9 +398,10 @@ function Get-FullPayload {
         bluetooth  = $script:cachedBt
         volume     = $vol
         muted      = $muted
-        netDown    = $net[0]
-        netUp      = $net[1]
-        ts         = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        netDown       = $net[0]
+        netUp         = $net[1]
+        browserActive = [SysAudioNet]::IsBrowserForeground()
+        ts            = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     }
 }
 

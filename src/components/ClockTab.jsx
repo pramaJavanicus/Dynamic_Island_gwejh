@@ -161,30 +161,30 @@ export default function ClockTab({ clock, onInputFocus }) {
       {/* Main content area */}
       <div className="min-h-0 flex-1">
         {subTab === 'timer' && (
-          <div className="flex h-full gap-3">
+          <div className="flex h-full gap-2.5">
             {/* Left: Countdown + controls */}
-            <div className="flex w-[240px] shrink-0 flex-col items-center justify-between rounded-2xl bg-white/[0.04] p-3 ring-1 ring-white/[0.06]">
+            <div className="flex w-[205px] shrink-0 flex-col items-center justify-between rounded-2xl bg-white/[0.04] p-2 ring-1 ring-white/[0.06]">
               <div className="flex w-full items-center justify-between px-1">
                 <button
                   type="button"
                   onClick={() => timer.addSeconds(-30)}
-                  className="rounded-lg bg-white/[0.07] px-2 py-0.5 text-[10.5px] font-medium text-white/75 hover:bg-white/15 hover:text-white"
+                  className="rounded-lg bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-medium text-white/75 hover:bg-white/15 hover:text-white"
                 >
                   -30d
                 </button>
-                <span className="font-display text-[32px] font-bold tracking-tight tabular-nums text-white">
+                <span className="font-display text-[23px] font-bold tracking-tight tabular-nums text-white">
                   {formatMinSec(timer.left)}
                 </span>
                 <button
                   type="button"
                   onClick={() => timer.addSeconds(60)}
-                  className="rounded-lg bg-white/[0.07] px-2 py-0.5 text-[10.5px] font-medium text-white/75 hover:bg-white/15 hover:text-white"
+                  className="rounded-lg bg-white/[0.07] px-1.5 py-0.5 text-[10px] font-medium text-white/75 hover:bg-white/15 hover:text-white"
                 >
                   +1m
                 </button>
               </div>
 
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
                 <div
                   className="h-full rounded-full bg-amber-400 transition-[width] duration-200 ease-linear"
                   style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
@@ -192,8 +192,8 @@ export default function ClockTab({ clock, onInputFocus }) {
               </div>
 
               {/* Custom min/sec input form */}
-              <form onSubmit={handleCustomTimerSubmit} className="flex w-full items-center justify-center gap-1.5">
-                <div className="flex items-center gap-1 rounded-lg bg-white/[0.06] px-2 py-1 ring-1 ring-white/[0.08]">
+              <form onSubmit={handleCustomTimerSubmit} className="flex w-full items-center justify-center gap-1">
+                <div className="flex items-center gap-0.5 rounded-lg bg-white/[0.06] px-1.5 py-0.5 ring-1 ring-white/[0.08]">
                   <input
                     type="number"
                     min="0"
@@ -202,11 +202,11 @@ export default function ClockTab({ clock, onInputFocus }) {
                     onChange={(e) => setCustomMin(e.target.value)}
                     onFocus={() => { onInputFocus?.(true); api.focus(); }}
                     onBlur={() => onInputFocus?.(false)}
-                    className="w-8 bg-transparent text-center font-mono text-[12px] font-semibold text-white outline-none"
+                    className="w-7 bg-transparent text-center font-mono text-[11px] font-semibold text-white outline-none"
                   />
-                  <span className="text-[10px] text-white/45">m</span>
+                  <span className="text-[9.5px] text-white/45">m</span>
                 </div>
-                <div className="flex items-center gap-1 rounded-lg bg-white/[0.06] px-2 py-1 ring-1 ring-white/[0.08]">
+                <div className="flex items-center gap-0.5 rounded-lg bg-white/[0.06] px-1.5 py-0.5 ring-1 ring-white/[0.08]">
                   <input
                     type="number"
                     min="0"
@@ -215,38 +215,38 @@ export default function ClockTab({ clock, onInputFocus }) {
                     onChange={(e) => setCustomSec(e.target.value)}
                     onFocus={() => { onInputFocus?.(true); api.focus(); }}
                     onBlur={() => onInputFocus?.(false)}
-                    className="w-7 bg-transparent text-center font-mono text-[12px] font-semibold text-white outline-none"
+                    className="w-6 bg-transparent text-center font-mono text-[11px] font-semibold text-white outline-none"
                   />
-                  <span className="text-[10px] text-white/45">d</span>
+                  <span className="text-[9.5px] text-white/45">d</span>
                 </div>
                 <button
                   type="submit"
-                  className="rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-white/20"
+                  className="rounded-lg bg-white/10 px-2 py-0.5 text-[10.5px] font-semibold text-amber-300 hover:bg-white/20"
                 >
                   Set
                 </button>
               </form>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => (timer.running ? timer.pause() : timer.start())}
-                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-semibold transition ${
+                  className={`flex items-center gap-1 rounded-full px-3.5 py-1 text-[11px] font-semibold transition ${
                     timer.running
                       ? 'bg-amber-400 text-black hover:brightness-110'
                       : 'bg-emerald-400 text-black hover:brightness-110'
                   }`}
                 >
-                  {timer.running ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                  {timer.running ? <Pause size={12.5} fill="currentColor" /> : <Play size={12.5} fill="currentColor" />}
                   {timer.running ? 'Jeda' : 'Mulai'}
                 </button>
                 <button
                   type="button"
                   onClick={() => timer.reset()}
                   title="Reset Timer"
-                  className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.08] text-white/75 hover:bg-white/15 hover:text-white"
+                  className="grid h-6 w-6 place-items-center rounded-full bg-white/[0.08] text-white/75 hover:bg-white/15 hover:text-white"
                 >
-                  <RotateCcw size={14} />
+                  <RotateCcw size={12.5} />
                 </button>
               </div>
             </div>
@@ -260,14 +260,14 @@ export default function ClockTab({ clock, onInputFocus }) {
                     key={p.sec}
                     type="button"
                     onClick={() => timer.start(p.sec)}
-                    className={`flex flex-col items-center justify-center rounded-xl border px-2 py-1.5 transition active:scale-95 ${
+                    className={`flex flex-col items-center justify-center rounded-xl border px-1.5 py-1 transition active:scale-95 ${
                       selected
                         ? 'border-amber-400/50 bg-amber-400/15 text-amber-200'
                         : 'border-white/[0.06] bg-white/[0.04] text-white/85 hover:bg-white/[0.1]'
                     }`}
                   >
-                    <span className="text-[12px] font-semibold">{p.label}</span>
-                    <span className="text-[9.5px] text-white/40">{selected ? 'Aktif' : 'Mulai'}</span>
+                    <span className="text-[11px] font-semibold">{p.label}</span>
+                    <span className="text-[9px] text-white/40">{selected ? 'Aktif' : 'Mulai'}</span>
                   </button>
                 );
               })}
@@ -276,26 +276,26 @@ export default function ClockTab({ clock, onInputFocus }) {
         )}
 
         {subTab === 'stopwatch' && (
-          <div className="flex h-full gap-3">
+          <div className="flex h-full gap-2.5">
             {/* Left: Stopwatch counter + controls */}
-            <div className="flex w-[240px] shrink-0 flex-col items-center justify-between rounded-2xl bg-white/[0.04] p-3 ring-1 ring-white/[0.06]">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            <div className="flex w-[205px] shrink-0 flex-col items-center justify-between rounded-2xl bg-white/[0.04] p-2.5 ring-1 ring-white/[0.06]">
+              <div className="text-[9.5px] font-semibold uppercase tracking-wider text-white/40">
                 Waktu Berjalan
               </div>
-              <div className="font-display text-[32px] font-bold tracking-tight tabular-nums text-white">
+              <div className="font-display text-[24px] font-bold tracking-tight tabular-nums text-white">
                 {formatStopwatch(stopwatch.elapsed)}
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={stopwatch.toggle}
-                  className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-semibold transition ${
+                  className={`flex items-center gap-1 rounded-full px-3.5 py-1 text-[11px] font-semibold transition ${
                     stopwatch.running
                       ? 'bg-rose-400 text-black hover:brightness-110'
                       : 'bg-emerald-400 text-black hover:brightness-110'
                   }`}
                 >
-                  {stopwatch.running ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                  {stopwatch.running ? <Pause size={12.5} fill="currentColor" /> : <Play size={12.5} fill="currentColor" />}
                   {stopwatch.running ? 'Jeda' : (stopwatch.elapsed > 0 ? 'Lanjut' : 'Mulai')}
                 </button>
                 <button
@@ -303,18 +303,18 @@ export default function ClockTab({ clock, onInputFocus }) {
                   onClick={stopwatch.lap}
                   disabled={!stopwatch.running && stopwatch.elapsed === 0}
                   title="Catat Putaran (Lap)"
-                  className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.08] text-white/80 hover:bg-white/15 disabled:opacity-30"
+                  className="grid h-7 w-7 place-items-center rounded-full bg-white/[0.08] text-white/80 hover:bg-white/15 disabled:opacity-30"
                 >
-                  <Flag size={13} />
+                  <Flag size={12} />
                 </button>
                 <button
                   type="button"
                   onClick={stopwatch.reset}
                   disabled={stopwatch.elapsed === 0 && !stopwatch.running}
                   title="Reset Stopwatch"
-                  className="grid h-8 w-8 place-items-center rounded-full bg-white/[0.08] text-white/80 hover:bg-white/15 disabled:opacity-30"
+                  className="grid h-7 w-7 place-items-center rounded-full bg-white/[0.08] text-white/80 hover:bg-white/15 disabled:opacity-30"
                 >
-                  <RotateCcw size={14} />
+                  <RotateCcw size={12.5} />
                 </button>
               </div>
             </div>
@@ -351,21 +351,21 @@ export default function ClockTab({ clock, onInputFocus }) {
         )}
 
         {subTab === 'alarm' && (
-          <div className="flex h-full gap-3">
+          <div className="flex h-full gap-2.5">
             {/* Left: Custom 24h Alarm Picker */}
             <form
               onSubmit={submitAlarm}
-              className="flex w-[240px] shrink-0 flex-col justify-between rounded-2xl bg-white/[0.04] p-2.5 ring-1 ring-white/[0.06]"
+              className="flex w-[205px] shrink-0 flex-col justify-between rounded-2xl bg-white/[0.04] p-2 ring-1 ring-white/[0.06]"
             >
               {/* Hour : Minute stepper */}
-              <div className="flex items-center justify-center gap-2">
-                <div className="flex flex-col items-center rounded-xl bg-white/[0.06] px-2.5 py-1 ring-1 ring-white/10">
+              <div className="flex items-center justify-center gap-1.5">
+                <div className="flex flex-col items-center rounded-xl bg-white/[0.06] px-2 py-0.5 ring-1 ring-white/10">
                   <button
                     type="button"
                     onClick={() => stepHour(1)}
                     className="text-white/50 hover:text-white"
                   >
-                    <ChevronUp size={13} />
+                    <ChevronUp size={11} />
                   </button>
                   <input
                     type="number"
@@ -379,26 +379,26 @@ export default function ClockTab({ clock, onInputFocus }) {
                       const v = Math.max(0, Math.min(23, parseInt(alarmHour || '0', 10) || 0));
                       setAlarmHour(String(v).padStart(2, '0'));
                     }}
-                    className="w-10 bg-transparent text-center font-display text-[20px] font-bold tabular-nums text-white outline-none"
+                    className="w-8 bg-transparent text-center font-display text-[16px] font-bold tabular-nums text-white outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => stepHour(-1)}
                     className="text-white/50 hover:text-white"
                   >
-                    <ChevronDown size={13} />
+                    <ChevronDown size={11} />
                   </button>
                 </div>
 
-                <span className="font-display text-[20px] font-bold text-white/50">:</span>
+                <span className="font-display text-[16px] font-bold text-white/50">:</span>
 
-                <div className="flex flex-col items-center rounded-xl bg-white/[0.06] px-2.5 py-1 ring-1 ring-white/10">
+                <div className="flex flex-col items-center rounded-xl bg-white/[0.06] px-2 py-0.5 ring-1 ring-white/10">
                   <button
                     type="button"
                     onClick={() => stepMin(5)}
                     className="text-white/50 hover:text-white"
                   >
-                    <ChevronUp size={13} />
+                    <ChevronUp size={11} />
                   </button>
                   <input
                     type="number"
@@ -412,23 +412,23 @@ export default function ClockTab({ clock, onInputFocus }) {
                       const v = Math.max(0, Math.min(59, parseInt(alarmMin || '0', 10) || 0));
                       setAlarmMin(String(v).padStart(2, '0'));
                     }}
-                    className="w-10 bg-transparent text-center font-display text-[20px] font-bold tabular-nums text-white outline-none"
+                    className="w-8 bg-transparent text-center font-display text-[16px] font-bold tabular-nums text-white outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => stepMin(-5)}
                     className="text-white/50 hover:text-white"
                   >
-                    <ChevronDown size={13} />
+                    <ChevronDown size={11} />
                   </button>
                 </div>
 
                 {/* Quick relative alarm buttons */}
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-0.5">
                   <button
                     type="button"
                     onClick={() => setAlarmRelativeMinutes(5)}
-                    className="rounded-lg bg-white/[0.07] px-2 py-0.5 text-[10px] font-medium text-amber-300 hover:bg-white/15"
+                    className="rounded-md bg-white/[0.07] px-1.5 py-0.5 text-[9.5px] font-medium text-amber-300 hover:bg-white/15"
                     title="Pasang alarm 5 menit dari sekarang"
                   >
                     +5m
@@ -436,7 +436,7 @@ export default function ClockTab({ clock, onInputFocus }) {
                   <button
                     type="button"
                     onClick={() => setAlarmRelativeMinutes(15)}
-                    className="rounded-lg bg-white/[0.07] px-2 py-0.5 text-[10px] font-medium text-amber-300 hover:bg-white/15"
+                    className="rounded-md bg-white/[0.07] px-1.5 py-0.5 text-[9.5px] font-medium text-amber-300 hover:bg-white/15"
                     title="Pasang alarm 15 menit dari sekarang"
                   >
                     +15m
@@ -444,7 +444,7 @@ export default function ClockTab({ clock, onInputFocus }) {
                   <button
                     type="button"
                     onClick={() => setAlarmRelativeMinutes(30)}
-                    className="rounded-lg bg-white/[0.07] px-2 py-0.5 text-[10px] font-medium text-amber-300 hover:bg-white/15"
+                    className="rounded-md bg-white/[0.07] px-1.5 py-0.5 text-[9.5px] font-medium text-amber-300 hover:bg-white/15"
                     title="Pasang alarm 30 menit dari sekarang"
                   >
                     +30m
@@ -459,14 +459,14 @@ export default function ClockTab({ clock, onInputFocus }) {
                 onFocus={() => { onInputFocus?.(true); api.focus(); }}
                 onBlur={() => onInputFocus?.(false)}
                 placeholder="Label (mis: Bangun / Rapat)"
-                className="rounded-xl bg-white/[0.06] px-2.5 py-1 text-[11px] text-white outline-none placeholder:text-white/35 focus:ring-1 focus:ring-white/25"
+                className="rounded-lg bg-white/[0.06] px-2 py-0.5 text-[10.5px] text-white outline-none placeholder:text-white/35 focus:ring-1 focus:ring-white/25"
               />
 
               <button
                 type="submit"
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-amber-400 py-1.5 text-[11.5px] font-semibold text-black hover:brightness-110 active:scale-98"
+                className="flex w-full items-center justify-center gap-1 rounded-lg bg-amber-400 py-1 text-[10.5px] font-semibold text-black hover:brightness-110 active:scale-98"
               >
-                <Plus size={13} strokeWidth={2.5} /> Pasang Alarm ({alarmHour.padStart(2, '0')}:{alarmMin.padStart(2, '0')})
+                <Plus size={12} strokeWidth={2.5} /> Pasang ({alarmHour.padStart(2, '0')}:{alarmMin.padStart(2, '0')})
               </button>
             </form>
 

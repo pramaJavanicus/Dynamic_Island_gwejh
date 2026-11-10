@@ -1374,6 +1374,7 @@ app.whenReady().then(async () => {
         muted: msg.muted ?? sysState.muted ?? false,
         netDown: msg.netDown ?? sysState.netDown ?? 0,
         netUp: msg.netUp ?? sysState.netUp ?? 0,
+        browserActive: !!msg.browserActive,
         ts: msg.ts,
       };
       win?.webContents.send('sysinfo:update', sysState);
