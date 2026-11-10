@@ -37,19 +37,19 @@ function playBtConnectChime() {
   } catch { /* ignore */ }
 }
 
-// Silky, critically-damped spring — ultra-smooth 120fps morph with zero jitter
+// Snappy, critically-damped spring — ultra-responsive open & close
 const SPRING = {
   type: 'spring',
-  stiffness: 380,
-  damping: 35,
-  mass: 0.68,
+  stiffness: 420,
+  damping: 36,
+  mass: 0.62,
   restDelta: 0.25,
 };
 
-// Compact, sleek Expanded Notch (matching Images 1, 2, 3 — not overly large!)
+// Compact, sleek Expanded Notch
 const EXPANDED = {
-  width: 550,
-  height: 224,
+  width: 556,
+  height: 236,
   borderTopLeftRadius: 0,
   borderTopRightRadius: 0,
   borderBottomLeftRadius: 30,
@@ -101,7 +101,6 @@ export default function App() {
 
   useEffect(() => {
     browserActiveRef.current = browserActive;
-    // When user opens Browser / Google, immediately collapse peek to the slim Image 4 mini-notch
     if (browserActive && modeRef.current === 'peek' && !hovered.current && !pinnedRef.current && !automation.status?.active) {
       setMode('hidden');
     }
@@ -248,7 +247,6 @@ export default function App() {
   const musicPlaying = !!(media?.active && media?.status === 'Playing');
   const currentLyric = musicPlaying && lyrics?.currentLine ? String(lyrics.currentLine).trim() : null;
 
-  // Image 4 Minimal Notch when browser/Google is active (or idle without synced lyrics)
   const useMinimalBrowserLip = browserActive && !activeAutomation;
 
   const dynamicIdleWidth = useMinimalBrowserLip
@@ -346,6 +344,7 @@ export default function App() {
     document.activeElement?.blur?.();
   }, []);
 
+  // Fast, responsive 90ms collapse when cursor leaves the island
   const scheduleHide = useCallback(() => {
     clearTimeout(leaveTimer.current);
     leaveTimer.current = setTimeout(() => {
@@ -353,16 +352,15 @@ export default function App() {
         !pinnedRef.current
         && !jarvisBusyRef.current
         && !hasPreviewRef.current
-        && !inputFocused.current
         && dragDepth.current === 0
         && !hovered.current
       ) {
         hideToLip();
       }
-    }, config?.collapseDelay ?? 380);
-  }, [hideToLip, config]);
+    }, 90);
+  }, [hideToLip]);
 
-  // --- Periodic 30-second status peek (paused when Browser/Google is open so it stays like Image 4) ---
+  // --- Periodic 30-second status peek (paused when Browser/Google is open) ---
   useEffect(() => {
     if (config?.peekEnabled === false) return undefined;
     const intervalMs = config?.peekInterval ?? 30000;
@@ -407,8 +405,6 @@ export default function App() {
   useEffect(() => api.onToggle(() => {
     if (modeRef.current === 'expanded') return hideToLip(true);
     expand('home');
-    setPinned(true);
-    pinnedRef.current = true;
     setFocusToken((t) => t + 1);
   }), [expand, hideToLip]);
 
@@ -424,6 +420,8 @@ export default function App() {
     hovered.current = false;
     clearTimeout(hoverTimer.current);
     if (!pinnedRef.current && !jarvisBusyRef.current && !hasPreviewRef.current && dragDepth.current === 0) {
+      inputFocused.current = false;
+      document.activeElement?.blur?.();
       scheduleHide();
     }
   }), [scheduleHide]);
@@ -456,6 +454,8 @@ export default function App() {
     hovered.current = false;
     clearTimeout(hoverTimer.current);
     if (!pinnedRef.current && !jarvisBusyRef.current && !hasPreviewRef.current && dragDepth.current === 0) {
+      inputFocused.current = false;
+      document.activeElement?.blur?.();
       scheduleHide();
     }
   };
@@ -464,8 +464,6 @@ export default function App() {
     if (mode !== 'expanded') {
       clearTimeout(hoverTimer.current);
       expand();
-      setPinned(true);
-      pinnedRef.current = true;
     }
   };
 
@@ -477,7 +475,9 @@ export default function App() {
     dragDepth.current += 1;
     if (dragDepth.current === 1) {
       setDragOver(true);
-      expand(tab === 'media' ? 'stash' : undefined);
+      if (modeRef.current !== 'expanded') {
+        expand(tab === 'media' || tab === 'clock' || tab === 'gemini' ? 'home' : undefined);
+      }
     }
   };
   const onDragOver = (e) => {
@@ -497,16 +497,15 @@ export default function App() {
     e.preventDefault();
     dragDepth.current = 0;
     setDragOver(false);
-    if (internalDrag.current || !e.dataTransfer.files.length) return;
+    if (internalDrag.current) return;
 
+    const droppedFiles = Array.from(e.dataTransfer?.files || []);
     if (tab === 'stash') {
-      stashActions.add(e.dataTransfer.files);
+      stashActions.add(droppedFiles);
     } else {
       setTab('home');
-      api.shortcuts.add(e.dataTransfer.files);
+      api.shortcuts.add(droppedFiles);
     }
-    setPinned(true);
-    pinnedRef.current = true;
   };
 
   const startDragOut = (name) => {
@@ -558,7 +557,7 @@ export default function App() {
               : `0 8px 22px -4px rgba(0,0,0,.72), 0 2px 14px -3px rgba(${accentRgb}, 0.28)`,
         }}
       >
-        {/* Concave Top-Edge Shoulder Fillets ("Notch Ears" like Image 1, 2, 4) */}
+        {/* Concave Top-Edge Shoulder Fillets ("Notch Ears") */}
         <CyberNotchEars size={earSize} color="#030306" />
 
         {/* Inner clipped content container */}
@@ -569,7 +568,7 @@ export default function App() {
             borderBottomRightRadius: targetBox.borderBottomRightRadius,
           }}
         >
-          {/* Subtle Nusa x Cyberpunk Bottom Horizon Glow (hidden when in minimal Image 4 browser lip) */}
+          {/* Subtle Nusa x Cyberpunk Bottom Horizon Glow */}
           {!(isHidden && useMinimalBrowserLip) && (
             <div
               className={`nusa-bottom-glow pointer-events-none absolute inset-x-4 bottom-0 transition-all duration-300 ${
@@ -588,8 +587,8 @@ export default function App() {
             }
             transition={
               isExpanded
-                ? { duration: 0.22, delay: 0.02, ease: [0.22, 1, 0.36, 1] }
-                : { duration: 0.13, ease: [0.4, 0, 1, 1] }
+                ? { duration: 0.2, delay: 0.01, ease: [0.22, 1, 0.36, 1] }
+                : { duration: 0.12, ease: [0.4, 0, 1, 1] }
             }
             className="absolute top-0 transform-gpu"
             style={{
@@ -628,7 +627,7 @@ export default function App() {
           <motion.div
             initial={false}
             animate={{ opacity: isCompact ? 1 : 0, scale: isCompact ? 1 : 0.92 }}
-            transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0 transform-gpu"
             style={{ pointerEvents: isCompact ? 'auto' : 'none', willChange: 'transform, opacity' }}
           >
@@ -646,7 +645,7 @@ export default function App() {
           <motion.div
             initial={false}
             animate={{ opacity: isAutoToast ? 1 : 0, scale: isAutoToast ? 1 : 0.92 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0 transform-gpu"
             style={{ pointerEvents: isAutoToast ? 'auto' : 'none', willChange: 'transform, opacity' }}
           >
@@ -657,7 +656,7 @@ export default function App() {
           <motion.div
             initial={false}
             animate={{ opacity: isBtToast ? 1 : 0, scale: isBtToast ? 1 : 0.92 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0 transform-gpu"
             style={{ pointerEvents: 'none', willChange: 'transform, opacity' }}
           >
@@ -668,7 +667,7 @@ export default function App() {
           <motion.div
             initial={false}
             animate={{ opacity: isPeek ? 1 : 0, scale: isPeek ? 1 : 0.92 }}
-            transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0 transform-gpu"
             style={{ pointerEvents: 'none', willChange: 'transform, opacity' }}
           >
@@ -685,7 +684,7 @@ export default function App() {
           <motion.div
             initial={false}
             animate={{ opacity: isHidden ? 1 : 0 }}
-            transition={{ duration: 0.14 }}
+            transition={{ duration: 0.12 }}
             className="absolute inset-0"
             style={{ pointerEvents: 'none' }}
           >

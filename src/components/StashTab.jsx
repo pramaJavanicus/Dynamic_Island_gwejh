@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  FolderOpen, Trash2, X, Upload, File as FileIcon, Folder, ClipboardList, Check, Plus,
+  FolderOpen, X, Upload, File as FileIcon, Folder, ClipboardList, Check, Plus,
 } from 'lucide-react';
 
 const api = window.island;
@@ -17,8 +17,9 @@ const formatSize = (b) => {
 export default function StashTab({
   items, actions, clipboardItems = [], clipboardActions, dragOver, onDragOut, onInputFocus,
 }) {
-  // 'files' (folder icon) | 'clips' (clipboard icon) — matching the top-right toggle in Image 2!
+  // 'files' (folder icon) | 'clips' (clipboard icon)
   const [mode, setMode] = useState(() => (items.length > 0 ? 'files' : 'clips'));
+  const prevCountRef = useRef(items.length);
   const [copiedId, setCopiedId] = useState(null);
   const [addingNote, setAddingNote] = useState(false);
   const [noteInput, setNoteInput] = useState('');
@@ -29,6 +30,14 @@ export default function StashTab({
       return [];
     }
   });
+
+  // Automatically switch to 'files' view whenever a new file is dropped/added into Shelf
+  useEffect(() => {
+    if (items.length > prevCountRef.current) {
+      setMode('files');
+    }
+    prevCountRef.current = items.length;
+  }, [items.length]);
 
   const savePinnedNotes = (next) => {
     setPinnedNotes(next);
@@ -66,9 +75,9 @@ export default function StashTab({
   const activeMode = dragOver ? 'files' : mode;
 
   return (
-    <div className="flex h-full flex-col justify-between gap-2">
-      {/* Top Action Bar with Image 2's [ Folder | Clipboard ] Pill Switch */}
-      <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col justify-between gap-1.5 px-1">
+      {/* Top Action Bar with [ Folder | Clipboard ] Pill Switch */}
+      <div className="flex items-center justify-between px-0.5">
         <div className="flex items-center gap-2 text-[11px] text-white/45">
           {activeMode === 'clips' ? (
             <>
@@ -92,7 +101,7 @@ export default function StashTab({
             </>
           ) : (
             <>
-              <span>{items.length} files · drag out or double-click</span>
+              <span>{items.length} files · drag in/out or double-click</span>
               <button
                 type="button"
                 onClick={() => api.stash.openDir()}
@@ -113,11 +122,12 @@ export default function StashTab({
           )}
         </div>
 
-        {/* Image 2 Signature Top-Right Toggle: [ Folder | Clipboard ] */}
+        {/* Top-Right Toggle: [ Folder | Clipboard ] */}
         <div className="flex items-center rounded-full bg-white/[0.07] p-0.5 ring-1 ring-white/[0.08]">
           <button
             type="button"
             onClick={() => setMode('files')}
+            onDragEnter={() => setMode('files')}
             title="File Shelf (Drag & Drop Files)"
             className={`flex h-5 w-7 items-center justify-center rounded-full transition-all ${
               activeMode === 'files'
@@ -144,7 +154,7 @@ export default function StashTab({
 
       {/* Optional inline quick-note input */}
       {addingNote && activeMode === 'clips' && (
-        <form onSubmit={addQuickCard} className="flex items-center gap-1.5">
+        <form onSubmit={addQuickCard} className="flex items-center gap-1.5 px-0.5">
           <input
             type="text"
             value={noteInput}
@@ -153,7 +163,7 @@ export default function StashTab({
             onBlur={() => onInputFocus?.(false)}
             placeholder="Ketik catatan singkat lalu Enter…"
             autoFocus
-            className="flex-1 rounded-xl bg-white/[0.08] px-2.5 py-1 text-[11.5px] text-white outline-none ring-1 ring-indigo-400/50 placeholder:text-white/35"
+            className="flex-1 rounded-xl border border-indigo-400/60 bg-white/[0.08] px-2.5 py-1 text-[11.5px] text-white outline-none placeholder:text-white/35"
           />
           <button
             type="submit"
@@ -164,16 +174,16 @@ export default function StashTab({
         </form>
       )}
 
-      {/* Main 4-Card Shelf Grid (Image 2 exact layout) */}
+      {/* Main 4-Card Shelf Grid — padded (p-1) + solid border so outline NEVER gets clipped! */}
       <div className="relative min-h-0 flex-1">
         {activeMode === 'clips' ? (
           combinedClips.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-1 rounded-2xl bg-white/[0.04] px-4 text-center text-[11.5px] text-white/40 ring-1 ring-white/[0.06]">
+            <div className="flex h-full flex-col items-center justify-center gap-1 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-center text-[11.5px] text-white/40">
               <span>Belum ada item clipboard atau catatan.</span>
               <span className="text-[10px] text-white/30">Setiap teks yang kamu Ctrl+C atau klik &ldquo;+ Note&rdquo; akan muncul sebagai kartu di sini.</span>
             </div>
           ) : (
-            <div className="no-scrollbar grid h-full grid-cols-4 gap-2.5 overflow-x-auto">
+            <div className="no-scrollbar grid h-full grid-cols-4 gap-2.5 overflow-x-auto p-1">
               {combinedClips.slice(0, 4).map((item, idx) => {
                 const isCopied = copiedId === item.id;
                 const isFirst = idx === 0;
@@ -184,8 +194,8 @@ export default function StashTab({
                     onClick={() => triggerCopied(item.id, item.text)}
                     className={`group relative flex cursor-pointer flex-col justify-between rounded-2xl p-3 transition-all ${
                       isFirst
-                        ? 'bg-white/[0.08] ring-[1.5px] ring-indigo-400/80 shadow-[0_0_16px_rgba(99,102,241,0.2)]'
-                        : 'bg-white/[0.05] ring-1 ring-white/[0.06] hover:bg-white/[0.08] hover:ring-indigo-400/50'
+                        ? 'border-[1.5px] border-indigo-400/90 bg-white/[0.08] shadow-[inset_0_0_14px_rgba(99,102,241,0.18)]'
+                        : 'border border-white/10 bg-white/[0.05] hover:border-indigo-400/60 hover:bg-white/[0.08]'
                     }`}
                   >
                     <p className="line-clamp-3 break-words text-[12px] font-medium leading-snug text-white/95">
@@ -216,7 +226,7 @@ export default function StashTab({
             className={`flex h-full flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed transition-all ${
               dragOver
                 ? 'border-indigo-400 bg-indigo-500/15'
-                : 'border-white/12 bg-white/[0.03]'
+                : 'border-white/15 bg-white/[0.03]'
             }`}
           >
             <Upload size={18} className="text-indigo-300" />
@@ -228,7 +238,7 @@ export default function StashTab({
             </span>
           </div>
         ) : (
-          <div className="no-scrollbar grid h-full grid-cols-4 gap-2.5 overflow-y-auto">
+          <div className="no-scrollbar grid h-full grid-cols-4 gap-2.5 overflow-y-auto p-1">
             <AnimatePresence initial={false}>
               {items.map((it, idx) => (
                 <motion.div
@@ -245,8 +255,8 @@ export default function StashTab({
                   onDoubleClick={() => api.stash.openItem(it.name)}
                   className={`group relative flex cursor-grab flex-col justify-between rounded-2xl p-3 transition active:cursor-grabbing ${
                     idx === 0
-                      ? 'bg-white/[0.08] ring-[1.5px] ring-indigo-400/80'
-                      : 'bg-white/[0.05] ring-1 ring-white/[0.06] hover:bg-white/[0.09]'
+                      ? 'border-[1.5px] border-indigo-400/90 bg-white/[0.08] shadow-[inset_0_0_14px_rgba(99,102,241,0.18)]'
+                      : 'border border-white/10 bg-white/[0.05] hover:border-indigo-400/60 hover:bg-white/[0.09]'
                   }`}
                 >
                   <div className="flex flex-col gap-1.5">

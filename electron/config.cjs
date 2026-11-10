@@ -20,9 +20,9 @@ function defaults() {
     autoStart: true, // jalan otomatis saat Windows start
 
     // Mode tersembunyi: island hanya berupa tonjolan kecil di tepi atas layar
-    edgeZoneWidth: 360, // lebar area pemicu (px) di tepi paling atas, di tengah layar
-    edgeHoverDelay: 140, // ms kursor harus diam di tepi atas sebelum island muncul
-    collapseDelay: 450, // ms sebelum island bersembunyi lagi setelah kursor pergi
+    edgeZoneWidth: 260, // lebar area pemicu (px) di tepi paling atas, di tengah layar
+    edgeHoverDelay: 80, // ms kursor harus diam di tepi atas sebelum island muncul
+    collapseDelay: 110, // ms sebelum island bersembunyi lagi setelah kursor pergi
 
     // Peek status (suhu, baterai laptop, baterai Bluetooth)
     peekEnabled: true,
@@ -71,7 +71,12 @@ async function addShortcuts(paths = []) {
     if (!rawPath) continue;
     const resolved = path.resolve(expandEnv(rawPath));
     if (!fs.existsSync(resolved)) continue;
-    if (list.some((item) => norm(item.path) === resolved.toLowerCase())) continue;
+    const existingIdx = list.findIndex((item) => norm(item.path) === resolved.toLowerCase());
+    if (existingIdx !== -1) {
+      const [existing] = list.splice(existingIdx, 1);
+      list.unshift(existing);
+      continue;
+    }
 
     let isDir = false;
     try {
@@ -98,7 +103,7 @@ async function addShortcuts(paths = []) {
       } catch { /* ignore */ }
     }
 
-    list.push({
+    list.unshift({
       name: cleanName,
       path: resolved,
       icon: isDir ? 'folder' : 'app',

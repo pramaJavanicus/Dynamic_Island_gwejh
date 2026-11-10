@@ -7,6 +7,60 @@ const on = (channel, cb) => {
   return () => ipcRenderer.removeListener(channel, listener);
 };
 
+// Capture native File paths directly in the preload world on drop before contextBridge
+// touches FileList (since FileList is not a plain Array across contextBridge).
+let lastDroppedPaths = [];
+
+function extractFilePaths(filesOrPaths) {
+  const out = [];
+  if (filesOrPaths) {
+    try {
+      const len = filesOrPaths.length ?? 0;
+      for (let i = 0; i < len; i += 1) {
+        const item = filesOrPaths[i];
+        if (!item) continue;
+        if (typeof item === 'string') {
+          out.push(item);
+        } else {
+          try {
+            const p = webUtils.getPathForFile(item);
+            if (p) out.push(p);
+          } catch {
+            if (item.path) out.push(item.path);
+          }
+        }
+      }
+    } catch { /* ignore */ }
+  }
+  if (out.length === 0 && lastDroppedPaths.length > 0) {
+    out.push(...lastDroppedPaths);
+  }
+  lastDroppedPaths = [];
+  return Array.from(new Set(out.filter(Boolean)));
+}
+
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+}, true);
+
+window.addEventListener('drop', (e) => {
+  try {
+    const dtFiles = e.dataTransfer?.files;
+    if (dtFiles && dtFiles.length > 0) {
+      const paths = [];
+      for (let i = 0; i < dtFiles.length; i += 1) {
+        try {
+          const p = webUtils.getPathForFile(dtFiles[i]);
+          if (p) paths.push(p);
+        } catch {
+          if (dtFiles[i]?.path) paths.push(dtFiles[i].path);
+        }
+      }
+      lastDroppedPaths = paths.filter(Boolean);
+    }
+  } catch { /* ignore */ }
+}, true);
+
 contextBridge.exposeInMainWorld('island', {
   // window
   setIgnoreMouse: (ignore) => ipcRenderer.send('island:ignore-mouse', ignore),
@@ -64,7 +118,7 @@ contextBridge.exposeInMainWorld('island', {
   },
 
   shortcuts: {
-    add: (files) => ipcRenderer.invoke('shortcuts:add', Array.from(files).map((f) => webUtils.getPathForFile(f)).filter(Boolean)),
+    add: (files) => ipcRenderer.invoke('shortcuts:add', extractFilePaths(files)),
     pick: () => ipcRenderer.invoke('shortcuts:pick'),
     remove: (targetPath) => ipcRenderer.invoke('shortcuts:remove', targetPath),
   },
@@ -94,8 +148,7 @@ contextBridge.exposeInMainWorld('island', {
 
   stash: {
     list: () => ipcRenderer.invoke('stash:list'),
-    // File objects -> absolute paths (File.path was removed in Electron 32+)
-    add: (files) => ipcRenderer.invoke('stash:add', Array.from(files).map((f) => webUtils.getPathForFile(f)).filter(Boolean)),
+    add: (files) => ipcRenderer.invoke('stash:add', extractFilePaths(files)),
     remove: (name) => ipcRenderer.invoke('stash:remove', name),
     clear: () => ipcRenderer.invoke('stash:clear'),
     openDir: () => ipcRenderer.send('stash:open-dir'),

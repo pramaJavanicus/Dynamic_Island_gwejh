@@ -1422,16 +1422,13 @@ app.whenReady().then(async () => {
     if (!win || win.isDestroyed() || !win.isVisible()) return;
     const pt = screen.getCursorScreenPoint();
     const b = screen.getPrimaryDisplay().bounds;
-    const lipW = config.get()?.edgeZoneWidth || 160;
     const cx = b.x + b.width / 2;
-    const inTopLip = pt.y >= b.y && pt.y <= b.y + 12 && Math.abs(pt.x - cx) <= lipW / 2;
-    const inIsland = pt.y >= b.y && pt.y <= b.y + 445 && Math.abs(pt.x - cx) <= 378;
+    const inTopLip = pt.y >= b.y && pt.y <= b.y + 18 && Math.abs(pt.x - cx) <= 135;
+    const inIsland = pt.y >= b.y && pt.y <= b.y + 252 && Math.abs(pt.x - cx) <= 284;
 
     if (islandExpanded) {
-      // While expanded, keep window interactive whenever cursor is inside the 740x340 island
       setIgnoreMouse(!inIsland);
     } else {
-      // While hidden/peeking, only the top lip is interactive
       setIgnoreMouse(!inTopLip);
     }
 
@@ -1452,7 +1449,7 @@ app.whenReady().then(async () => {
       wasInIsland = false;
       win.webContents.send('island:cursor-outside');
     }
-  }, 40);
+  }, 35);
 });
 
 app.on('will-quit', () => {
